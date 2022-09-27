@@ -6,4 +6,4 @@
 + midi note（0-127 LongTensor）通过pitch_embedding后与soft-units相加替代vits原本的文本输入
 + 采用了VISinger中的PitchPredictor，引入了PitchLoss修正音高
 
-ps：目前效果不是很好
+ps：该方案目前存在跑调问题
