@@ -143,7 +143,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
     pitch = pitch.cuda(rank, non_blocking=True)
 
     with autocast(enabled=hps.train.fp16_run):
-      y_hat, l_length, l_pitch, attn, ids_slice, x_mask, z_mask,\
+      y_hat, l_pitch, ids_slice, x_mask, z_mask,\
       (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(x, x_lengths, spec, spec_lengths, pitch, speakers)
 
       mel = spec_to_mel_torch(
@@ -182,14 +182,13 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
       # Generator
       y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = net_d(y, y_hat)
       with autocast(enabled=False):
-        loss_dur = torch.sum(l_length.float())
         loss_pitch = torch.sum(l_pitch.float())
         loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel
         loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * hps.train.c_kl
 
         loss_fm = feature_loss(fmap_r, fmap_g)
         loss_gen, losses_gen = generator_loss(y_d_hat_g)
-        loss_gen_all = loss_gen + loss_fm + loss_mel + loss_dur + loss_kl + loss_pitch
+        loss_gen_all = loss_gen + loss_fm + loss_mel  + loss_kl + loss_pitch
     optim_g.zero_grad()
     scaler.scale(loss_gen_all).backward()
     scaler.unscale_(optim_g)
@@ -200,14 +199,14 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
     if rank==0:
       if global_step % hps.train.log_interval == 0:
         lr = optim_g.param_groups[0]['lr']
-        losses = [loss_disc, loss_gen, loss_fm, loss_mel, loss_dur, loss_kl, loss_pitch]
+        losses = [loss_disc, loss_gen, loss_fm, loss_mel, loss_kl, loss_pitch]
         logger.info('Train Epoch: {} [{:.0f}%]'.format(
           epoch,
           100. * batch_idx / len(train_loader)))
         logger.info([x.item() for x in losses] + [global_step, lr])
         
         scalar_dict = {"loss/g/total": loss_gen_all, "loss/d/total": loss_disc_all, "learning_rate": lr, "grad_norm_d": grad_norm_d, "grad_norm_g": grad_norm_g}
-        scalar_dict.update({"loss/g/fm": loss_fm, "loss/g/mel": loss_mel, "loss/g/dur": loss_dur, "loss/g/kl": loss_kl, "loss/g/pitch": loss_pitch})
+        scalar_dict.update({"loss/g/fm": loss_fm, "loss/g/mel": loss_mel, "loss/g/kl": loss_kl, "loss/g/pitch": loss_pitch})
 
         scalar_dict.update({"loss/g/{}".format(i): v for i, v in enumerate(losses_gen)})
         scalar_dict.update({"loss/d_r/{}".format(i): v for i, v in enumerate(losses_disc_r)})
@@ -216,7 +215,6 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
             "slice/mel_org": utils.plot_spectrogram_to_numpy(y_mel[0].data.cpu().numpy()),
             "slice/mel_gen": utils.plot_spectrogram_to_numpy(y_hat_mel[0].data.cpu().numpy()), 
             "all/mel": utils.plot_spectrogram_to_numpy(mel[0].data.cpu().numpy()),
-            "all/attn": utils.plot_alignment_to_numpy(attn[0,0].data.cpu().numpy())
         }
         utils.summarize(
           writer=writer,
@@ -252,7 +250,7 @@ def evaluate(hps, generator, eval_loader, writer_eval):
         y_lengths = y_lengths[:1]
         speakers = speakers[:1]
         break
-      y_hat, attn, mask, *_ = generator.module.infer(x, x_lengths, pitch,  speakers, max_len=1000)
+      y_hat, mask, *_ = generator.module.infer(x, x_lengths, pitch,  speakers, max_len=1000)
       y_hat_lengths = mask.sum([1,2]).long() * hps.data.hop_length
 
       mel = spec_to_mel_torch(
