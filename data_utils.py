@@ -8,7 +8,6 @@ import numpy as np
 import commons
 from mel_processing import spectrogram_torch
 from utils import load_wav_to_torch, load_filepaths_and_text
-from text import text_to_sequence, cleaned_text_to_sequence
 
 
 def dropout1d(myarray, ratio=0.5):
