@@ -14,41 +14,6 @@ from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from commons import init_weights, get_padding
 
 
-class PitchPredictor(nn.Module):
-    def __init__(self,
-                 n_vocab,
-                 out_channels,
-                 hidden_channels,
-                 filter_channels,
-                 n_heads,
-                 n_layers,
-                 kernel_size,
-                 p_dropout):
-        super().__init__()
-        self.n_vocab = n_vocab  # 音素的个数，中文和英文不同
-        self.out_channels = out_channels
-        self.hidden_channels = hidden_channels
-        self.filter_channels = filter_channels
-        self.n_heads = n_heads
-        self.n_layers = n_layers
-        self.kernel_size = kernel_size
-        self.p_dropout = p_dropout
-
-        self.pitch_net = attentions.Encoder(
-            hidden_channels,
-            filter_channels,
-            n_heads,
-            n_layers,
-            kernel_size,
-            p_dropout)
-        self.proj = nn.Conv1d(hidden_channels, 1, 1)
-
-    def forward(self, x, x_mask):
-        pitch_embedding = self.pitch_net(x * x_mask, x_mask)
-        pitch_embedding = pitch_embedding * x_mask
-        pred_pitch = self.proj(pitch_embedding)
-        return pred_pitch, pitch_embedding
-
 
 class TextEncoder(nn.Module):
     def __init__(self,
@@ -72,7 +37,7 @@ class TextEncoder(nn.Module):
 
         # self.emb = nn.Embedding(n_vocab, hidden_channels)
         # nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
-        self.emb_pitch = nn.Embedding(128, hidden_channels)
+        self.emb_pitch = nn.Embedding(256, hidden_channels)
         nn.init.normal_(self.emb_pitch.weight, 0.0, hidden_channels ** -0.5)
 
         self.encoder = attentions.Encoder(
@@ -374,8 +339,6 @@ class SynthesizerTrn(nn.Module):
         self.enc_q = PosteriorEncoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16,
                                       gin_channels=gin_channels)
         self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, gin_channels=gin_channels)
-        self.pitch_net = PitchPredictor(n_vocab, inter_channels, hidden_channels, filter_channels, n_heads, n_layers,
-                                        kernel_size, p_dropout)
 
         if n_speakers > 1:
             self.emb_g = nn.Embedding(n_speakers, gin_channels)
@@ -383,16 +346,6 @@ class SynthesizerTrn(nn.Module):
     def forward(self, x, x_lengths, y, y_lengths, pitch, sid=None):
 
         x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths, pitch)
-        # print(f"x: {x.shape}")
-        pred_pitch, pitch_embedding = self.pitch_net(x, x_mask)
-        # print(f"pred_pitch: {pred_pitch.shape}")
-        # print(f"pitch_embedding: {pitch_embedding.shape}")
-        lf0 = torch.unsqueeze(pred_pitch, -1)
-        gt_lf0 = torch.log(440 * (2 ** ((pitch - 69) / 12)))
-        gt_lf0 = gt_lf0.to(x.device)
-        x_mask_sum = torch.sum(x_mask)
-        lf0 = lf0.squeeze()
-        l_pitch = torch.sum((gt_lf0 - lf0) ** 2, 1) / x_mask_sum
 
         if self.n_speakers > 0:
             g = self.emb_g(sid).unsqueeze(-1)  # [b, h, 1]
@@ -400,16 +353,15 @@ class SynthesizerTrn(nn.Module):
             g = None
 
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
-        # print(f"z: {z.shape}")
 
         z_p = self.flow(z, y_mask, g=g)
-        # print(f"z_p: {z_p.shape}")
+        #         print(f"z_p: {z_p.shape}")
 
         z_slice, ids_slice = commons.rand_slice_segments(z, y_lengths, self.segment_size)
         # print(f"z_slice: {z_slice.shape}")
 
         o = self.dec(z_slice, g=g)
-        return o, l_pitch, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
+        return o, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
 
     def infer(self, x, x_lengths, pitch, sid=None, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
         x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths, pitch)
