@@ -107,8 +107,8 @@ def run(rank, n_gpus, hps):
     except:
         epoch_str = 1
         global_step = 0
-    epoch_str = 1
-    global_step = 0
+#     epoch_str = 1
+#     global_step = 0
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
