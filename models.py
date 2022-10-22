@@ -12,7 +12,7 @@ import attentions
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from commons import init_weights, get_padding
-
+from vdecoder.hifigan.hifigan import HifiGanGenerator
 
 
 class TextEncoder(nn.Module):
@@ -334,8 +334,32 @@ class SynthesizerTrn(nn.Module):
                                  n_layers,
                                  kernel_size,
                                  p_dropout)
-        self.dec = Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates,
-                             upsample_initial_channel, upsample_kernel_sizes, gin_channels=gin_channels)
+        # self.dec = Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates,
+        #                      upsample_initial_channel, upsample_kernel_sizes, gin_channels=gin_channels)
+        #
+        # from DiffSinger: modules.hifigan.hifigan.HifiGanGenerator
+        # hps = {
+        #     "resblock_kernel_sizes": [3, 7, 11],
+        #     "upsample_rates": [8, 8, 2, 2],
+        #     "upsample_initial_channel": 128,
+        #     "use_pitch_embed": True,
+        #     "audio_sample_rate": kwargs["sampling_rate"],
+        #     "resblock": "1",
+        #     "resblock_dilation_sizes": [[1, 3, 5], [1, 3, 5], [1, 3, 5]]
+        # }
+        # from sovits json config hps
+        hps = {
+            "resblock_kernel_sizes": resblock_kernel_sizes,
+            "inter_channels": inter_channels,
+            "upsample_rates": upsample_rates,
+            "upsample_kernel_sizes": upsample_kernel_sizes,
+            "upsample_initial_channel": upsample_initial_channel,
+            "use_pitch_embed": True,
+            "audio_sample_rate": kwargs["sampling_rate"],
+            "resblock": "1",
+            "resblock_dilation_sizes": resblock_dilation_sizes
+        }
+        self.dec = HifiGanGenerator(h=hps)
         self.enc_q = PosteriorEncoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16,
                                       gin_channels=gin_channels)
         self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, gin_channels=gin_channels)
@@ -357,10 +381,11 @@ class SynthesizerTrn(nn.Module):
         z_p = self.flow(z, y_mask, g=g)
         #         print(f"z_p: {z_p.shape}")
 
-        z_slice, ids_slice = commons.rand_slice_segments(z, y_lengths, self.segment_size)
+        z_slice, pitch_slice, ids_slice = commons.rand_slice_segments_with_pitch(z, pitch, y_lengths, self.segment_size)
         # print(f"z_slice: {z_slice.shape}")
 
-        o = self.dec(z_slice, g=g)
+        # o = self.dec(z_slice, g=g)
+        o = self.dec(z_slice, f0=pitch_slice)
         return o, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
 
     def infer(self, x, x_lengths, pitch, sid=None, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
@@ -371,7 +396,8 @@ class SynthesizerTrn(nn.Module):
             g = None
         z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale
         z = self.flow(z_p, x_mask, g=g, reverse=True)
-        o = self.dec((z * x_mask)[:, :, :max_len], g=g)
+        # o = self.dec((z * x_mask)[:, :, :max_len], g=g)
+        o = self.dec((z * x_mask)[:, :, :max_len], f0=pitch)
         return o, x_mask, (z, z_p, m_p, logs_p)
 
     def voice_conversion(self, y, y_lengths, sid_src, sid_tgt):
@@ -383,4 +409,3 @@ class SynthesizerTrn(nn.Module):
         z_hat = self.flow(z_p, y_mask, g=g_tgt, reverse=True)
         o_hat = self.dec(z_hat * y_mask, g=g_tgt)
         return o_hat, y_mask, (z, z_p, z_hat)
-
