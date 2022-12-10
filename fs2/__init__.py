@@ -30,20 +30,20 @@ class TransformerEncoderLayer(nn.Module):
 
 class FFTBlocks(nn.Module):
     def __init__(self, hidden_size=192, num_layers=4, ffn_kernel_size=9, dropout=0.1, num_heads=2,
-                 use_pos_embed=True, use_last_norm=True, norm='ln', use_pos_embed_alpha=True):
+                 use_pos_embed=False, use_last_norm=True, norm='ln', use_pos_embed_alpha=True):
         super().__init__()
         self.num_layers = num_layers
         embed_dim = self.hidden_size = hidden_size
         self.dropout = dropout
         self.use_pos_embed = use_pos_embed
         self.use_last_norm = use_last_norm
-        if use_pos_embed:
-            self.max_source_positions = DEFAULT_MAX_TARGET_POSITIONS
-            self.padding_idx = 0
-            self.pos_embed_alpha = nn.Parameter(torch.Tensor([1])) if use_pos_embed_alpha else 1
-            self.embed_positions = SinusoidalPositionalEmbedding(
-                embed_dim, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
-            )
+        # if use_pos_embed:
+        #     self.max_source_positions = DEFAULT_MAX_TARGET_POSITIONS
+        #     self.padding_idx = 0
+        #     self.pos_embed_alpha = nn.Parameter(torch.Tensor([1])) if use_pos_embed_alpha else 1
+        #     self.embed_positions = SinusoidalPositionalEmbedding(
+        #         embed_dim, self.padding_idx, init_size=DEFAULT_MAX_TARGET_POSITIONS,
+        #     )
 
         self.layers = nn.ModuleList([])
         self.layers.extend([
