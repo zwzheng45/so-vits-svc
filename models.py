@@ -13,6 +13,7 @@ from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from commons import init_weights, get_padding
 from vdecoder.hifigan.models import Generator
 from utils import f0_to_coarse
+import fs2
 
 class ResidualCouplingBlock(nn.Module):
   def __init__(self,
@@ -103,13 +104,16 @@ class TextEncoder(nn.Module):
     self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
     self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
     self.f0_emb = nn.Embedding(256, hidden_channels)
-    self.enc = modules.WN(hidden_channels, kernel_size, dilation_rate, n_layers, gin_channels=gin_channels)
+    self.enc = fs2.FFTBlocks()
+
 
   def forward(self, x, x_lengths, f0=None):
     x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
     x = self.pre(x) * x_mask
     x = x + self.f0_emb(f0).transpose(1,2)
-    x = self.enc(x, x_mask)
+    x = x.transpose(1, 2)
+    x = self.enc(x)
+    x = x.transpose(1, 2)
     stats = self.proj(x) * x_mask
     m, logs = torch.split(stats, self.out_channels, dim=1)
     z = (m + torch.randn_like(m) * torch.exp(logs)) * x_mask
