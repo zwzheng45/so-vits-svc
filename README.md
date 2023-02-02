@@ -1,4 +1,9 @@
-# 此Fork为个人Colab自用
+## Colab用
+<p>
+    <a target="_blank" href="https://colab.research.google.com/github/zwzheng45/so-vits-svc/blob/32k/%E2%80%9Csovits3_0%E4%B8%80%E9%94%AE%E8%84%9A%E6%9C%AC_ipynb%E2%80%9D%E7%9A%84%E5%89%AF%E6%9C%AC.ipynb">
+        <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+    </a>
+</p>  
 
 # SoftVC VITS Singing Voice Conversion
 ## English docs
