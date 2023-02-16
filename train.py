@@ -15,19 +15,19 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.cuda.amp import autocast, GradScaler
 
-import commons
+import modules.commons as commons
 import utils
 from data_utils import TextAudioSpeakerLoader, EvalDataLoader
 from models import (
     SynthesizerTrn,
     MultiPeriodDiscriminator,
 )
-from losses import (
+from modules.losses import (
     kl_loss,
     generator_loss, discriminator_loss, feature_loss
 )
 
-from mel_processing import mel_spectrogram_torch, spec_to_mel_torch
+from modules.mel_processing import mel_spectrogram_torch, spec_to_mel_torch
 
 torch.backends.cudnn.benchmark = True
 global_step = 0

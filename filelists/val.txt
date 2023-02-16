@@ -1,6 +1,4 @@
-./dataset/32k/nen/kne110_005.wav
-./dataset/32k/yunhao/001827.wav
-./dataset/32k/jishuang/000104.wav
-./dataset/32k/jishuang/000223.wav
-./dataset/32k/nen/kne110_004.wav
-./dataset/32k/yunhao/001828.wav
+./dataset/44k/nyaru/000003.wav
+./dataset/44k/nyaru/000007.wav
+./dataset/44k/taffy/000558.wav
+./dataset/44k/taffy/000556.wav

@@ -10,7 +10,7 @@ from tqdm import tqdm
 from scipy.io import wavfile
 
 import utils
-from mel_processing import mel_spectrogram_torch
+from modules.mel_processing import mel_spectrogram_torch
 #import h5py
 import logging
 logging.getLogger('numba').setLevel(logging.WARNING)

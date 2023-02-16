@@ -5,8 +5,8 @@ import numpy as np
 import torch
 import torch.utils.data
 
-import commons
-from mel_processing import spectrogram_torch, spec_to_mel_torch
+import modules.commons as commons
+from modules.mel_processing import spectrogram_torch, spec_to_mel_torch
 from utils import load_wav_to_torch, load_filepaths_and_text, transform
 
 # import h5py

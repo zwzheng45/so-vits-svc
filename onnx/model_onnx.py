@@ -4,13 +4,13 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-import attentions
-import commons
-import modules
+import modules.attentions as attentions
+import modules.commons as commons
+import modules.modules as modules
 
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
-from commons import init_weights, get_padding
+from modules.commons import init_weights, get_padding
 from vdecoder.hifigan.models import Generator
 from utils import f0_to_coarse
 
@@ -305,7 +305,7 @@ class SynthesizerTrn(nn.Module):
 
     self.enc_p_ = TextEncoder(ssl_dim, inter_channels, hidden_channels, 5, 1, 16,0, filter_channels, n_heads, p_dropout)
     hps = {
-        "sampling_rate": 48000,
+        "sampling_rate": 32000,
         "inter_channels": 192,
         "resblock": "1",
         "resblock_kernel_sizes": [3, 7, 11],

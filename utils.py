@@ -14,7 +14,7 @@ from scipy.io.wavfile import read
 import torch
 import torchvision
 from torch.nn import functional as F
-from commons import sequence_mask
+from modules.commons import sequence_mask
 from hubert import hubert_model
 MATPLOTLIB_FLAG = False
 
@@ -130,7 +130,7 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
               'learning_rate': learning_rate}, checkpoint_path)
   clean_ckpt = False
   if clean_ckpt:
-    clean_checkpoints(path_to_models='logs/32k/', n_ckpts_to_keep=3, sort_by_time=True)
+    clean_checkpoints(path_to_models='logs/44k/', n_ckpts_to_keep=3, sort_by_time=True)
 
 def clean_checkpoints(path_to_models='logs/48k/', n_ckpts_to_keep=2, sort_by_time=True):
   """Freeing up space by deleting saved ckpts

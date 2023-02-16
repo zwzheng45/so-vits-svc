@@ -17,7 +17,7 @@ config_template = {
     "batch_size": 12,
     "fp16_run": False,
     "lr_decay": 0.999875,
-    "segment_size": 17920,
+    "segment_size": 10240,
     "init_lr_ratio": 1,
     "warmup_epochs": 0,
     "c_mel": 45,
@@ -30,13 +30,13 @@ config_template = {
     "training_files":"filelists/train.txt",
     "validation_files":"filelists/val.txt",
     "max_wav_value": 32768.0,
-    "sampling_rate": 32000,
-    "filter_length": 1280,
-    "hop_length": 320,
-    "win_length": 1280,
+    "sampling_rate": 44100,
+    "filter_length": 2048,
+    "hop_length": 512,
+    "win_length": 2048,
     "n_mel_channels": 80,
     "mel_fmin": 0.0,
-    "mel_fmax": None
+    "mel_fmax": 22050
   },
   "model": {
     "inter_channels": 192,
@@ -49,14 +49,14 @@ config_template = {
     "resblock": "1",
     "resblock_kernel_sizes": [3,7,11],
     "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5]],
-    "upsample_rates": [10,8,2,2],
-    "upsample_initial_channel": 512,
-    "upsample_kernel_sizes": [16,16,4,4],
+    "upsample_rates": [8,8,4,2],
+    "upsample_initial_channel": 256,
+    "upsample_kernel_sizes": [16,16,8,4],
     "n_layers_q": 3,
     "use_spectral_norm": False,
     "gin_channels": 256,
     "ssl_dim": 256,
-    "n_speakers": 0,
+    "n_speakers": 200,
   },
   "spk":{
     "nen": 0,
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     parser.add_argument("--train_list", type=str, default="./filelists/train.txt", help="path to train list")
     parser.add_argument("--val_list", type=str, default="./filelists/val.txt", help="path to val list")
     parser.add_argument("--test_list", type=str, default="./filelists/test.txt", help="path to test list")
-    parser.add_argument("--source_dir", type=str, default="./dataset/32k", help="path to source dir")
+    parser.add_argument("--source_dir", type=str, default="./dataset/44k", help="path to source dir")
     args = parser.parse_args()
     
     train = []
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         train += wavs[2:-2]
         val += wavs[:2]
         test += wavs[-2:]
-    n_speakers = len(spk_dict.keys())*2
+
     shuffle(train)
     shuffle(val)
     shuffle(test)
@@ -118,7 +118,6 @@ if __name__ == "__main__":
             wavpath = fname
             f.write(wavpath + "\n")
 
-    config_template["model"]["n_speakers"] = n_speakers
     config_template["spk"] = spk_dict
     print("Writing configs/config.json")
     with open("configs/config.json", "w") as f:
