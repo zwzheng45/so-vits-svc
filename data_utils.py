@@ -6,6 +6,7 @@ import torch
 import torch.utils.data
 
 import modules.commons as commons
+import utils
 from modules.mel_processing import spectrogram_torch, spec_to_mel_torch
 from utils import load_wav_to_torch, load_filepaths_and_text, transform
 
@@ -58,15 +59,16 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         spk = filename.split("/")[-2]
         spk = torch.LongTensor([self.spk_map[spk]])
 
-        c = torch.load(filename + ".soft.pt").squeeze(0)
-        c = torch.repeat_interleave(c, repeats=2, dim=1)
-
         f0 = np.load(filename + ".f0.npy")
         f0 = torch.FloatTensor(f0)
-        lmin = min(c.size(-1), spec.size(-1), f0.shape[0])
-        assert abs(c.size(-1) - spec.size(-1)) < 4, (c.size(-1), spec.size(-1), f0.shape, filename)
-        assert abs(lmin - spec.size(-1)) < 4, (c.size(-1), spec.size(-1), f0.shape)
-        assert abs(lmin - c.size(-1)) < 4, (c.size(-1), spec.size(-1), f0.shape)
+
+        c = torch.load(filename+ ".soft.pt")
+        c = utils.repeat_expand_2d(c.squeeze(0), f0.shape[0])
+
+
+        lmin = min(c.size(-1), spec.size(-1))
+        assert abs(c.size(-1) - spec.size(-1)) < 3, (c.size(-1), spec.size(-1), f0.shape, filename)
+
         spec, c, f0 = spec[:, :lmin], c[:, :lmin], f0[:lmin]
         audio_norm = audio_norm[:, :lmin * self.hop_length]
         _spec, _c, _audio_norm, _f0 = spec, c, audio_norm, f0
@@ -107,7 +109,7 @@ class EvalDataLoader(torch.utils.data.Dataset):
         self.win_length = hparams.data.win_length
         self.sampling_rate = hparams.data.sampling_rate
         self.use_sr = hparams.train.use_sr
-        self.audiopaths = self.audiopaths[:5]
+        self.audiopaths = self.audiopaths[:6]
         self.spk_map = hparams.spk
 
 
@@ -132,15 +134,15 @@ class EvalDataLoader(torch.utils.data.Dataset):
         spk = filename.split("/")[-2]
         spk = torch.LongTensor([self.spk_map[spk]])
 
-        c = torch.load(filename + ".soft.pt").squeeze(0)
-
-        c = torch.repeat_interleave(c, repeats=2, dim=1)
-
         f0 = np.load(filename + ".f0.npy")
         f0 = torch.FloatTensor(f0)
+
+        c = torch.load(filename + ".soft.pt")
+        c = utils.repeat_expand_2d(c.squeeze(0), f0.shape[0])
+
         lmin = min(c.size(-1), spec.size(-1), f0.shape[0])
-        assert abs(c.size(-1) - spec.size(-1)) < 4, (c.size(-1), spec.size(-1), f0.shape)
-        assert abs(f0.shape[0] - spec.shape[-1]) < 4, (c.size(-1), spec.size(-1), f0.shape)
+        assert abs(c.size(-1) - spec.size(-1)) < 3, (c.size(-1), spec.size(-1), f0.shape)
+
         spec, c, f0 = spec[:, :lmin], c[:, :lmin], f0[:lmin]
         audio_norm = audio_norm[:, :lmin * self.hop_length]
 

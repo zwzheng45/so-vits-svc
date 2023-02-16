@@ -40,24 +40,44 @@ def f0_to_coarse(f0):
 
 
 def get_hubert_model(rank=None):
-
-  hubert_soft = hubert_model.hubert_soft("hubert/hubert-soft-0d54a1f4.pt")
+  vec_path = "hubert/checkpoint_best_legacy_500.pt"
+  print("load model(s) from {}".format(vec_path))
+  from fairseq import checkpoint_utils
+  models, saved_cfg, task = checkpoint_utils.load_model_ensemble_and_task(
+    [vec_path],
+    suffix="",
+  )
+  model = models[0]
   if rank is not None:
-    hubert_soft = hubert_soft.cuda(rank)
-  return hubert_soft
+    model = model.cuda(rank)
+  model.eval()
+  return model
 
-def get_hubert_content(hmodel, y=None, path=None):
-  if path is not None:
-    source, sr = torchaudio.load(path)
-    source = torchaudio.functional.resample(source, sr, 16000)
-    if len(source.shape) == 2 and source.shape[1] >= 2:
-      source = torch.mean(source, dim=0).unsqueeze(0)
+def get_hubert_content(hmodel, y=None, path=None, device="cpu"):
+  if path != None:
+    audio, sampling_rate = librosa.load(path)
+    if len(audio.shape) > 1:
+      audio = librosa.to_mono(audio.transpose(1, 0))
+    if sampling_rate != 16000:
+      audio = librosa.resample(audio, orig_sr=sampling_rate, target_sr=16000)
+    feats = torch.from_numpy(audio).float()
+
   else:
-    source = y
-  source = source.unsqueeze(0)
-  with torch.inference_mode():
-    units = hmodel.units(source)
-    return units.transpose(1,2)
+    feats = y.squeeze(0)
+  if feats.dim() == 2:  # double channels
+    feats = feats.mean(-1)
+  assert feats.dim() == 1, feats.dim()
+  feats = feats.view(1, -1)
+  padding_mask = torch.BoolTensor(feats.shape).fill_(False)
+  inputs = {
+    "source": feats.to(device),
+    "padding_mask": padding_mask.to(device),
+    "output_layer": 9,  # layer 9
+  }
+  with torch.no_grad():
+    logits = hmodel.extract_features(**inputs)
+    feats = hmodel.final_proj(logits[0])
+  return feats.transpose(1, 2)
 
 
 def get_content(cmodel, y):
@@ -85,39 +105,40 @@ def stretch(mel, width): # 0.5-2
     return torchvision.transforms.functional.resize(mel, (mel.size(-2), width))
 
 
-def load_checkpoint(checkpoint_path, model, optimizer=None):
-  assert os.path.isfile(checkpoint_path)
-  checkpoint_dict = torch.load(checkpoint_path, map_location='cpu')
-  iteration = checkpoint_dict['iteration']
-  learning_rate = checkpoint_dict['learning_rate']
-  if iteration is None:
-    iteration = 1
-  if learning_rate is None:
-    learning_rate = 0.0002
-  if optimizer is not None and checkpoint_dict['optimizer'] is not None:
-    optimizer.load_state_dict(checkpoint_dict['optimizer'])
-  saved_state_dict = checkpoint_dict['model']
-  if hasattr(model, 'module'):
-    state_dict = model.module.state_dict()
-  else:
-    state_dict = model.state_dict()
-  new_state_dict= {}
-  for k, v in state_dict.items():
-    try:
-      new_state_dict[k] = saved_state_dict[k]
-    except:
-      logger.info("%s is not in the checkpoint" % k)
-      new_state_dict[k] = v
-  if hasattr(model, 'module'):
-    model.module.load_state_dict(new_state_dict)
-  else:
-    model.load_state_dict(new_state_dict)
-  logger.info("Loaded checkpoint '{}' (iteration {})" .format(
-    checkpoint_path, iteration))
-  return model, optimizer, learning_rate, iteration
+def load_checkpoint(checkpoint_path, model, optimizer=None, skip_optimizer=False):
+    assert os.path.isfile(checkpoint_path)
+    checkpoint_dict = torch.load(checkpoint_path, map_location='cpu')
+    iteration = checkpoint_dict['iteration']
+    learning_rate = checkpoint_dict['learning_rate']
+    if optimizer is not None and not skip_optimizer:
+        optimizer.load_state_dict(checkpoint_dict['optimizer'])
+    saved_state_dict = checkpoint_dict['model']
+    if hasattr(model, 'module'):
+        state_dict = model.module.state_dict()
+    else:
+        state_dict = model.state_dict()
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        try:
+            # assert "dec" in k or "disc" in k
+            # print("load", k)
+            new_state_dict[k] = saved_state_dict[k]
+            assert saved_state_dict[k].shape == v.shape, (saved_state_dict[k].shape, v.shape)
+        except:
+            print("error, %s is not in the checkpoint" % k)
+            logger.info("%s is not in the checkpoint" % k)
+            new_state_dict[k] = v
+    if hasattr(model, 'module'):
+        model.module.load_state_dict(new_state_dict)
+    else:
+        model.load_state_dict(new_state_dict)
+    print("load ")
+    logger.info("Loaded checkpoint '{}' (iteration {})".format(
+        checkpoint_path, iteration))
+    return model, optimizer, learning_rate, iteration
 
 
-def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path):
+def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path, val_steps, current_step):
   logger.info("Saving model and optimizer state at iteration {} to {}".format(
     iteration, checkpoint_path))
   if hasattr(model, 'module'):
@@ -128,9 +149,11 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
               'iteration': iteration,
               'optimizer': optimizer.state_dict(),
               'learning_rate': learning_rate}, checkpoint_path)
-  clean_ckpt = False
-  if clean_ckpt:
-    clean_checkpoints(path_to_models='logs/44k/', n_ckpts_to_keep=3, sort_by_time=True)
+  if current_step >= val_steps * 3:
+    to_del_ckptname = checkpoint_path.replace(str(current_step), str(current_step - val_steps * 3))
+    os.remove(to_del_ckptname)
+    print("Removing ", to_del_ckptname)
+
 
 def clean_checkpoints(path_to_models='logs/48k/', n_ckpts_to_keep=2, sort_by_time=True):
   """Freeing up space by deleting saved ckpts
@@ -320,6 +343,23 @@ def get_logger(model_dir, filename="train.log"):
   h.setFormatter(formatter)
   logger.addHandler(h)
   return logger
+
+
+def repeat_expand_2d(content, target_len):
+    # content : [h, t]
+
+    src_len = content.shape[-1]
+    target = torch.zeros([content.shape[0], target_len], dtype=torch.float)
+    temp = torch.arange(src_len+1) * target_len / src_len
+    current_pos = 0
+    for i in range(target_len):
+        if i < temp[current_pos+1]:
+            target[:, i] = content[:, current_pos]
+        else:
+            current_pos += 1
+            target[:, i] = content[:, current_pos]
+
+    return target
 
 
 class HParams():

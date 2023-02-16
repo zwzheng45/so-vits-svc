@@ -262,7 +262,7 @@ class SynthesizerTrn(nn.Module):
   Synthesizer for Training
   """
 
-  def __init__(self, 
+  def __init__(self,
     spec_channels,
     segment_size,
     inter_channels,
@@ -281,6 +281,7 @@ class SynthesizerTrn(nn.Module):
     gin_channels,
     ssl_dim,
     n_speakers,
+    sampling_rate=44100,
     **kwargs):
 
     super().__init__()
@@ -305,15 +306,15 @@ class SynthesizerTrn(nn.Module):
 
     self.enc_p_ = TextEncoder(ssl_dim, inter_channels, hidden_channels, 5, 1, 16,0, filter_channels, n_heads, p_dropout)
     hps = {
-        "sampling_rate": 32000,
-        "inter_channels": 192,
-        "resblock": "1",
-        "resblock_kernel_sizes": [3, 7, 11],
-        "resblock_dilation_sizes": [[1, 3, 5], [1, 3, 5], [1, 3, 5]],
-        "upsample_rates": [10, 8, 2, 2],
-        "upsample_initial_channel": 512,
-        "upsample_kernel_sizes": [16, 16, 4, 4],
-        "gin_channels": 256,
+        "sampling_rate": sampling_rate,
+        "inter_channels": inter_channels,
+        "resblock": resblock,
+        "resblock_kernel_sizes": resblock_kernel_sizes,
+        "resblock_dilation_sizes": resblock_dilation_sizes,
+        "upsample_rates": upsample_rates,
+        "upsample_initial_channel": upsample_initial_channel,
+        "upsample_kernel_sizes": upsample_kernel_sizes,
+        "gin_channels": gin_channels,
     }
     self.dec = Generator(h=hps)
     self.enc_q = Encoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16, gin_channels=gin_channels)
