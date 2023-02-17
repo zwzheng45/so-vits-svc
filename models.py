@@ -86,7 +86,6 @@ class TextEncoder(nn.Module):
       out_channels,
       hidden_channels,
       kernel_size,
-      dilation_rate,
       n_layers,
       gin_channels=0,
       filter_channels=None,
@@ -97,7 +96,6 @@ class TextEncoder(nn.Module):
     self.out_channels = out_channels
     self.hidden_channels = hidden_channels
     self.kernel_size = kernel_size
-    self.dilation_rate = dilation_rate
     self.n_layers = n_layers
     self.gin_channels = gin_channels
     self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
@@ -304,7 +302,17 @@ class SynthesizerTrn(nn.Module):
     self.ssl_dim = ssl_dim
     self.emb_g = nn.Embedding(n_speakers, gin_channels)
 
-    self.enc_p_ = TextEncoder(ssl_dim, inter_channels, hidden_channels, 5, 1, 16,0, filter_channels, n_heads, p_dropout)
+
+    self.enc_p = TextEncoder(
+        ssl_dim,
+        inter_channels,
+        hidden_channels,
+        filter_channels=filter_channels,
+        n_heads=n_heads,
+        n_layers=n_layers,
+        kernel_size=kernel_size,
+        p_dropout=p_dropout
+    )
     hps = {
         "sampling_rate": sampling_rate,
         "inter_channels": inter_channels,
@@ -328,7 +336,7 @@ class SynthesizerTrn(nn.Module):
 
     g = self.emb_g(g).transpose(1,2)
 
-    z_ptemp, m_p, logs_p, _ = self.enc_p_(c, c_lengths, f0=f0_to_coarse(f0))
+    z_ptemp, m_p, logs_p, _ = self.enc_p(c, c_lengths, f0=f0_to_coarse(f0))
     z, m_q, logs_q, spec_mask = self.enc_q(spec, spec_lengths, g=g) 
 
     z_p = self.flow(z, spec_mask, g=g)
@@ -344,7 +352,7 @@ class SynthesizerTrn(nn.Module):
       c_lengths = (torch.ones(c.size(0)) * c.size(-1)).to(c.device)
     g = self.emb_g(g).transpose(1,2)
 
-    z_p, m_p, logs_p, c_mask = self.enc_p_(c, c_lengths, f0=f0_to_coarse(f0))
+    z_p, m_p, logs_p, c_mask = self.enc_p(c, c_lengths, f0=f0_to_coarse(f0))
     z = self.flow(z_p, c_mask, g=g, reverse=True)
 
     o = self.dec(z * c_mask, g=g, f0=f0)

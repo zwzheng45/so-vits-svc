@@ -12,7 +12,6 @@ import numpy as np
 import torchaudio
 from scipy.io.wavfile import read
 import torch
-import torchvision
 from torch.nn import functional as F
 from modules.commons import sequence_mask
 from hubert import hubert_model
@@ -86,23 +85,6 @@ def get_content(cmodel, y):
     c = c.transpose(1, 2)
     return c
 
-
-
-def transform(mel, height): # 68-92
-    #r = np.random.random()
-    #rate = r * 0.3 + 0.85 # 0.85-1.15
-    #height = int(mel.size(-2) * rate)
-    tgt = torchvision.transforms.functional.resize(mel, (height, mel.size(-1)))
-    if height >= mel.size(-2):
-        return tgt[:, :mel.size(-2), :]
-    else:
-        silence = tgt[:,-1:,:].repeat(1,mel.size(-2)-height,1)
-        silence += torch.randn_like(silence) / 10
-        return torch.cat((tgt, silence), 1)
-
-
-def stretch(mel, width): # 0.5-2
-    return torchvision.transforms.functional.resize(mel, (mel.size(-2), width))
 
 
 def load_checkpoint(checkpoint_path, model, optimizer=None, skip_optimizer=False):

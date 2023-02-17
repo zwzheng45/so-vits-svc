@@ -89,13 +89,18 @@ def run(rank, n_gpus, hps):
     net_g = DDP(net_g, device_ids=[rank])  # , find_unused_parameters=True)
     net_d = DDP(net_d, device_ids=[rank])
 
+    skip_optimizer = True
     try:
         _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g,
-                                                   optim_g)
+                                                   optim_g, skip_optimizer)
         _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d,
-                                                   optim_d)
+                                                   optim_d, skip_optimizer)
         global_step = (epoch_str - 1) * len(train_loader)
     except:
+        print("load old checkpoint failed...")
+        epoch_str = 1
+        global_step = 0
+    if skip_optimizer:
         epoch_str = 1
         global_step = 0
 
