@@ -27,20 +27,50 @@ f0_mel_min = 1127 * np.log(1 + f0_min / 700)
 f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 
 
+# def normalize_f0(f0, random_scale=True):
+#     f0_norm = f0.clone()  # create a copy of the input Tensor
+#     batch_size, _, frame_length = f0_norm.shape
+#     for i in range(batch_size):
+#         means = torch.mean(f0_norm[i, 0, :])
+#         if random_scale:
+#             factor = random.uniform(0.8, 1.2)
+#         else:
+#             factor = 1
+#         f0_norm[i, 0, :] = (f0_norm[i, 0, :] - means) * factor
+#     return f0_norm
 def normalize_f0(f0, random_scale=True):
-    device = f0.device
-    batch_size, frame_length = f0.shape
-    norm_f0 = torch.zeros_like(f0).to(device)
-    for i in range(batch_size):
-        non_zero = f0[i, 0, :] != 0
-        f0_non_zero = f0[i, 0, non_zero].to(device)
-        means = torch.mean(f0_non_zero)
-        if random_scale:
-            factor = random.uniform(0.8, 1.2)
-        else:
-            factor = 1
-        norm_f0[i, 0, non_zero] = (f0[i, 0, non_zero] - means) * factor
-    return norm_f0
+    means = torch.mean(f0[:, 0, :], dim=1, keepdim=True)
+    if random_scale:
+        factor = torch.Tensor(f0.shape[0],1).uniform_(0.8, 1.2).to(f0.device)
+    else:
+        factor = torch.ones(f0.shape[0], 1, 1).to(f0.device)
+    f0_norm = (f0 - means.unsqueeze(-1))
+    f0_norm =f0_norm * factor.unsqueeze(-1)
+    return f0_norm
+
+
+def plot_data_to_numpy(x, y):
+    global MATPLOTLIB_FLAG
+    if not MATPLOTLIB_FLAG:
+        import matplotlib
+        matplotlib.use("Agg")
+        MATPLOTLIB_FLAG = True
+        mpl_logger = logging.getLogger('matplotlib')
+        mpl_logger.setLevel(logging.WARNING)
+    import matplotlib.pylab as plt
+    import numpy as np
+
+    fig, ax = plt.subplots(figsize=(10, 2))
+    plt.plot(x)
+    plt.plot(y)
+    plt.tight_layout()
+
+    fig.canvas.draw()
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close()
+    return data
+
 
 
 def interpolate_f0(f0):

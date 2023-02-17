@@ -84,7 +84,6 @@ class Encoder(nn.Module):
 
 class TextEncoder(nn.Module):
   def __init__(self,
-      in_channels,
       out_channels,
       hidden_channels,
       kernel_size,
@@ -94,13 +93,11 @@ class TextEncoder(nn.Module):
       n_heads=None,
       p_dropout=None):
     super().__init__()
-    self.in_channels = in_channels
     self.out_channels = out_channels
     self.hidden_channels = hidden_channels
     self.kernel_size = kernel_size
     self.n_layers = n_layers
     self.gin_channels = gin_channels
-    self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
     self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
     self.f0_emb = nn.Embedding(256, hidden_channels)
 
@@ -112,9 +109,7 @@ class TextEncoder(nn.Module):
         kernel_size,
         p_dropout)
 
-  def forward(self, x, x_lengths, f0=None):
-    x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
-    x = self.pre(x) * x_mask
+  def forward(self, x, x_mask, f0=None):
     x = x + self.f0_emb(f0).transpose(1,2)
     x = self.enc_(x * x_mask, x_mask)
     stats = self.proj(x) * x_mask
@@ -256,6 +251,48 @@ class SpeakerEncoder(torch.nn.Module):
         
         return embed
 
+class F0Decoder(nn.Module):
+    def __init__(self,
+                 out_channels,
+                 hidden_channels,
+                 filter_channels,
+                 n_heads,
+                 n_layers,
+                 kernel_size,
+                 p_dropout,
+                 spk_channels=0):
+        super().__init__()
+        self.out_channels = out_channels
+        self.hidden_channels = hidden_channels
+        self.filter_channels = filter_channels
+        self.n_heads = n_heads
+        self.n_layers = n_layers
+        self.kernel_size = kernel_size
+        self.p_dropout = p_dropout
+        self.spk_channels = spk_channels
+
+        self.prenet = nn.Conv1d(hidden_channels, hidden_channels, 3, padding=1)
+        self.decoder = attentions.FFT(
+            hidden_channels,
+            filter_channels,
+            n_heads,
+            n_layers,
+            kernel_size,
+            p_dropout)
+        self.proj = nn.Conv1d(hidden_channels, out_channels, 1)
+        self.f0_prenet = nn.Conv1d(1, hidden_channels , 3, padding=1)
+        self.cond = nn.Conv1d(spk_channels, hidden_channels, 1)
+
+    def forward(self, x, norm_f0, x_mask, spk_emb=None):
+        x = torch.detach(x)
+        if (spk_emb is not None):
+            x = x + self.cond(spk_emb)
+        x += self.f0_prenet(norm_f0)
+        x = self.prenet(x) * x_mask
+        x = self.decoder(x * x_mask, x_mask)
+        x = self.proj(x) * x_mask
+        return x
+
 
 class SynthesizerTrn(nn.Module):
   """
@@ -304,9 +341,9 @@ class SynthesizerTrn(nn.Module):
     self.ssl_dim = ssl_dim
     self.emb_g = nn.Embedding(n_speakers, gin_channels)
 
+    self.pre = nn.Conv1d(ssl_dim, hidden_channels, kernel_size=5, padding=2)
 
     self.enc_p = TextEncoder(
-        ssl_dim,
         inter_channels,
         hidden_channels,
         filter_channels=filter_channels,
@@ -329,35 +366,60 @@ class SynthesizerTrn(nn.Module):
     self.dec = Generator(h=hps)
     self.enc_q = Encoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16, gin_channels=gin_channels)
     self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, gin_channels=gin_channels)
+    self.f0_decoder = F0Decoder(
+        1,
+        hidden_channels,
+        filter_channels,
+        n_heads,
+        n_layers,
+        kernel_size,
+        p_dropout,
+        spk_channels=gin_channels
+    )
 
   def forward(self, c, f0, spec, g=None, mel=None, c_lengths=None, spec_lengths=None):
     if c_lengths == None:
       c_lengths = (torch.ones(c.size(0)) * c.size(-1)).to(c.device)
     if spec_lengths == None:
       spec_lengths = (torch.ones(spec.size(0)) * spec.size(-1)).to(spec.device)
-
     g = self.emb_g(g).transpose(1,2)
 
-    # norm_f0 = utils.normalize_f0(f0)
-    z_ptemp, m_p, logs_p, _ = self.enc_p(c, c_lengths, f0=f0_to_coarse(f0))
+    # ssl prenet
+    x_mask = torch.unsqueeze(commons.sequence_mask(c_lengths, c.size(2)), 1).to(c.dtype)
+    x = self.pre(c) * x_mask
+
+    # f0 predict
+    lf0 = 2595. * torch.log10(1. + f0.unsqueeze(1) / 700.) / 500
+    norm_lf0 = utils.normalize_f0(lf0)
+    pred_lf0 = self.f0_decoder(x, norm_lf0, x_mask, spk_emb=g)
+
+    # encoder
+    z_ptemp, m_p, logs_p, _ = self.enc_p(x, x_mask, f0=f0_to_coarse(f0))
     z, m_q, logs_q, spec_mask = self.enc_q(spec, spec_lengths, g=g) 
 
+    # flow
     z_p = self.flow(z, spec_mask, g=g)
     z_slice, pitch_slice, ids_slice = commons.rand_slice_segments_with_pitch(z, f0, spec_lengths, self.segment_size)
 
-    # o = self.dec(z_slice, g=g)
+    # nsf decoder
     o = self.dec(z_slice, g=g, f0=pitch_slice)
 
-    return o, ids_slice, spec_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
+    return o, ids_slice, spec_mask, (z, z_p, m_p, logs_p, m_q, logs_q), pred_lf0, norm_lf0, lf0
 
-  def infer(self, c, f0, g=None, mel=None, c_lengths=None):
+  def infer(self, c, f0, g=None, c_lengths=None, predict_f0=False):
     if c_lengths == None:
       c_lengths = (torch.ones(c.size(0)) * c.size(-1)).to(c.device)
     g = self.emb_g(g).transpose(1,2)
+    x_mask = torch.unsqueeze(commons.sequence_mask(c_lengths, c.size(2)), 1).to(c.dtype)
+    x = self.pre(c) * x_mask
 
-    z_p, m_p, logs_p, c_mask = self.enc_p(c, c_lengths, f0=f0_to_coarse(f0))
+    if predict_f0:
+        lf0 = 2595. * torch.log10(1. + f0.unsqueeze(1) / 700.) / 500
+        norm_lf0 = utils.normalize_f0(lf0)
+        pred_lf0 = self.f0_decoder(x, norm_lf0, x_mask, spk_emb=g)
+        f0 = (700 * (torch.pow(10, pred_lf0 * 500 / 2595) - 1)).squeeze(1)
+
+    z_p, m_p, logs_p, c_mask = self.enc_p(x, x_mask, f0=f0_to_coarse(f0))
     z = self.flow(z_p, c_mask, g=g, reverse=True)
-
     o = self.dec(z * c_mask, g=g, f0=f0)
-
     return o
