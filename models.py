@@ -10,6 +10,8 @@ import modules.modules as modules
 
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
+
+import utils
 from modules.commons import init_weights, get_padding
 from vdecoder.hifigan.models import Generator
 from utils import f0_to_coarse
@@ -336,6 +338,7 @@ class SynthesizerTrn(nn.Module):
 
     g = self.emb_g(g).transpose(1,2)
 
+    # norm_f0 = utils.normalize_f0(f0)
     z_ptemp, m_p, logs_p, _ = self.enc_p(c, c_lengths, f0=f0_to_coarse(f0))
     z, m_q, logs_q, spec_mask = self.enc_q(spec, spec_lengths, g=g) 
 
