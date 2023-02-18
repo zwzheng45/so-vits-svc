@@ -62,6 +62,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         f0 = np.load(filename + ".f0.npy")
         f0, uv = utils.interpolate_f0(f0)
         f0 = torch.FloatTensor(f0)
+        uv = torch.FloatTensor(uv)
 
         c = torch.load(filename+ ".soft.pt")
         c = utils.repeat_expand_2d(c.squeeze(0), f0.shape[0])
@@ -70,7 +71,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         lmin = min(c.size(-1), spec.size(-1))
         assert abs(c.size(-1) - spec.size(-1)) < 3, (c.size(-1), spec.size(-1), f0.shape, filename)
         assert abs(audio_norm.shape[1]-lmin * self.hop_length) < 3 * self.hop_length
-        spec, c, f0 = spec[:, :lmin], c[:, :lmin], f0[:lmin]
+        spec, c, f0, uv = spec[:, :lmin], c[:, :lmin], f0[:lmin], uv[:lmin]
         audio_norm = audio_norm[:, :lmin * self.hop_length]
         if spec.shape[1] < 60:
             print("skip too short audio:", filename)
@@ -78,10 +79,10 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         if spec.shape[1] > 800:
             start = random.randint(0, spec.shape[1]-800)
             end = start + 790
-            spec, c, f0 = spec[:, start:end], c[:, start:end], f0[start:end]
+            spec, c, f0, uv = spec[:, start:end], c[:, start:end], f0[start:end], uv[start:end]
             audio_norm = audio_norm[:, start * self.hop_length : end * self.hop_length]
 
-        return c, f0, spec, audio_norm, spk
+        return c, f0, spec, audio_norm, spk, uv
 
     def __getitem__(self, index):
         return self.get_audio(self.audiopaths[index][0])
@@ -109,11 +110,13 @@ class TextAudioCollate:
         spec_padded = torch.FloatTensor(len(batch), batch[0][2].shape[0], max_c_len)
         wav_padded = torch.FloatTensor(len(batch), 1, max_wav_len)
         spkids = torch.LongTensor(len(batch), 1)
+        uv_padded = torch.FloatTensor(len(batch), max_c_len)
 
         c_padded.zero_()
         spec_padded.zero_()
         f0_padded.zero_()
         wav_padded.zero_()
+        uv_padded.zero_()
 
         for i in range(len(ids_sorted_decreasing)):
             row = batch[ids_sorted_decreasing[i]]
@@ -133,4 +136,7 @@ class TextAudioCollate:
 
             spkids[i, 0] = row[4]
 
-        return c_padded, f0_padded, spec_padded, wav_padded, spkids, lengths
+            uv = row[5]
+            uv_padded[i, :uv.size(0)] = uv
+
+        return c_padded, f0_padded, spec_padded, wav_padded, spkids, lengths, uv_padded

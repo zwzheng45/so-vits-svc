@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 import soundfile
 
@@ -14,7 +15,7 @@ from inference.infer_tool import Svc
 logging.getLogger('numba').setLevel(logging.WARNING)
 chunks_dict = infer_tool.read_temp("inference/chunks_temp.json")
 
-model_path = "/Volumes/Extend/下载/cvecG_50400.pth"
+model_path = "/Volumes/Extend/下载/G_800.pth"
 config_path = "configs/config.json"
 cluster_model_path = "logs/44k/kmeans_10000.pt"
 svc_model = Svc(model_path, config_path,
@@ -23,14 +24,15 @@ svc_model = Svc(model_path, config_path,
 infer_tool.mkdir(["raw", "results"])
 
 # 支持多个wav文件，放在raw文件夹下
-clean_names = ["mytest","src-test"]
-clean_names = ["长音频"]
+clean_names = ["君の知らない物語-src"]
+clean_names = ["mytest"]
+# clean_names = ["长音频"]
 trans = [0]  # 音高调整，支持正负（半音）
-spk_list = ['jishuang']  # 每次同时合成多语者音色
+spk_list = ['paimon']  # 每次同时合成多语者音色
 slice_db = -40  # 默认-40，嘈杂的音频可以-30，干声保留呼吸可以-50
 wav_format = 'flac'  # 音频输出格式
-cluster_infer_ratio = 0
-auto_predict_f0 = False
+cluster_infer_ratio = 1
+auto_predict_f0 = True
 
 infer_tool.fill_a_to_b(trans, clean_names)
 for clean_name, tran in zip(clean_names, trans):

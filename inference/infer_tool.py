@@ -133,8 +133,10 @@ class Svc(object):
         f0 = utils.compute_f0_parselmouth(wav, sampling_rate=self.target_sample, hop_length=self.hop_size)
         f0, uv = utils.interpolate_f0(f0)
         f0 = torch.FloatTensor(f0)
+        uv = torch.FloatTensor(uv)
         f0 = f0 * 2 ** (tran / 12)
         f0 = f0.unsqueeze(0).to(self.dev)
+        uv = uv.unsqueeze(0).to(self.dev)
 
         wav16k = librosa.resample(wav, orig_sr=self.target_sample, target_sr=16000)
         wav16k = torch.from_numpy(wav16k).to(self.dev)
@@ -147,19 +149,19 @@ class Svc(object):
             c = cluster_infer_ratio * cluster_c + (1 - cluster_infer_ratio) * c
 
         c = c.unsqueeze(0)
-        return c, f0
+        return c, f0, uv
 
     def infer(self, speaker, tran, raw_path,
               cluster_infer_ratio=0,
               auto_predict_f0=False):
         speaker_id = self.spk2id[speaker]
         sid = torch.LongTensor([int(speaker_id)]).to(self.dev).unsqueeze(0)
-        c, f0 = self.get_unit_f0(raw_path, tran, cluster_infer_ratio, speaker)
+        c, f0, uv = self.get_unit_f0(raw_path, tran, cluster_infer_ratio, speaker)
         if "half" in self.net_g_path and torch.cuda.is_available():
             c = c.half()
         with torch.no_grad():
             start = time.time()
-            audio = self.net_g_ms.infer(c, f0=f0, g=sid, predict_f0=auto_predict_f0)[0,0].data.float()
+            audio = self.net_g_ms.infer(c, f0=f0, g=sid, uv=uv, predict_f0=auto_predict_f0)[0,0].data.float()
             use_time = time.time() - start
             print("vits use time:{}".format(use_time))
         return audio, audio.shape[-1]

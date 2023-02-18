@@ -46,17 +46,20 @@ f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 #         factor = torch.ones(f0.shape[0], 1, 1).to(f0.device)
 #     f0_norm = (f0 - means.unsqueeze(-1)) * factor.unsqueeze(-1)
 #     return f0_norm
-def normalize_f0(f0, x_mask, random_scale=True):
+def normalize_f0(f0, x_mask, uv, random_scale=True):
     # calculate means based on x_mask
-    mask = x_mask.squeeze(1)
-    means = torch.sum(f0[:, 0, :] * mask, dim=1, keepdim=True) / torch.sum(mask, dim=1, keepdim=True)
+    uv_sum = torch.sum(uv, dim=1, keepdim=True)
+    uv_sum[uv_sum == 0] = 9999
+    means = torch.sum(f0[:, 0, :] * uv, dim=1, keepdim=True) / uv_sum
 
     if random_scale:
         factor = torch.Tensor(f0.shape[0], 1).uniform_(0.8, 1.2).to(f0.device)
     else:
-        factor = torch.ones(f0.shape[0], 1, 1).to(f0.device)
+        factor = torch.ones(f0.shape[0], 1).to(f0.device)
     # normalize f0 based on means and factor
     f0_norm = (f0 - means.unsqueeze(-1)) * factor.unsqueeze(-1)
+    if torch.isnan(f0_norm).any():
+        exit(0)
     return f0_norm * x_mask
 
 
