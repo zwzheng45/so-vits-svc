@@ -1,48 +1,27 @@
 # SoftVC VITS Singing Voice Conversion
-## English docs
-[Check here](Eng_docs.md)
-
-
-## Updates
-> 据不完全统计，多说话人似乎会导致**音色泄漏加重**，不建议训练超过5人的模型，目前的建议是如果想炼出来更像目标音色，**尽可能炼单说话人的**\
-> 断音问题已解决，音质提升了不少\
-> 2.0版本已经移至 sovits_2.0分支\
-> 3.0版本使用FreeVC的代码结构，与旧版本不通用\
-> 与[DiffSVC](https://github.com/prophesier/diff-svc) 相比，在训练数据质量非常高时diffsvc有着更好的表现，对于质量差一些的数据集，本仓库可能会有更好的表现，此外，本仓库推理速度上比diffsvc快很多
 
 
 ## 模型简介
 歌声音色转换模型，通过SoftVC内容编码器提取源音频语音特征，与F0同时输入VITS替换原本的文本输入达到歌声转换的效果。同时，更换声码器为 [NSF HiFiGAN](https://github.com/openvpi/DiffSinger/tree/refactor/modules/nsf_hifigan) 解决断音问题
 
+### 4.0版本更新内容
++ 特征输入更换为 [Content Vec](https://github.com/auspicious3000/contentvec) 
++ 采样率统一使用44100hz
++ 由于更改了hop size等参数以及精简了部分模型结构，推理所需显存占用大幅降低，4.0版本44khz显存占用甚至远小于3.0版本的32khz
++ 调整了部分代码结构
++ 数据集制作、训练过程和3.0保持一致，但模型不通用
++ 增加了可选项 1：vc模式自动预测音高f0,即转换语音时不需要手动输入变调key，男女声的调能自动转换，但仅限语音转换，该模式转换歌声会跑调
++ 增加了可选项 2：通过kmeans聚类方案减小音色泄漏，即使得音色更加像目标音色
 
-## 注意
-+ 当前分支是32khz版本的分支，32khz模型推理更快，显存占用大幅减小，数据集所占硬盘空间也大幅降低，推荐训练该版本模型
-+ 如果要训练48khz的模型请切换到[main分支](https://github.com/innnky/so-vits-svc/tree/main) 
-
+模型仍在训练测试效果中。。。。目前暂时请不要训练
 
 ## 预先下载的模型文件
-+ soft vc hubert：[hubert-soft-0d54a1f4.pt](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt)
++ contentvec ：[checkpoint_best_legacy_500.pt](https://ibm.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr)
   + 放在`hubert`目录下
-+ 预训练底模文件 [G_0.pth](https://huggingface.co/innnky/sovits_pretrained/resolve/main/G_0.pth) 与 [D_0.pth](https://huggingface.co/innnky/sovits_pretrained/resolve/main/D_0.pth)
-  + 放在`logs/32k`目录下
-  + 预训练底模为必选项，因为据测试从零开始训练有概率不收敛，同时底模也能加快训练速度
-  + 预训练底模训练数据集包含云灏 即霜 辉宇·星AI 派蒙 绫地宁宁，覆盖男女生常见音域，可以认为是相对通用的底模
-  + 底模删除了`optimizer speaker_embedding`等无关权重, 只可以用于初始化训练，无法用于推理
-  + 该底模和48khz底模通用
-```shell
-# 一键下载
-# hubert
-wget -P hubert/ https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt
-# G与D预训练模型
-wget -P logs/32k/ https://huggingface.co/innnky/sovits_pretrained/resolve/main/G_0.pth
-wget -P logs/32k/ https://huggingface.co/innnky/sovits_pretrained/resolve/main/D_0.pth
-
-```
-
++ 预训练底模文件：还在训练中
 
 ## colab一键数据集制作、训练脚本
-[一键colab](https://colab.research.google.com/drive/1_-gh9i-wCPNlRZw6pYF-9UufetcVrGBX?usp=sharing)
-
+暂未制作
 
 ## 数据集准备
 仅需要以以下文件结构将数据集放入dataset_raw目录即可
@@ -60,7 +39,7 @@ dataset_raw
 
 
 ## 数据预处理
-1. 重采样至 32khz
+1. 重采样至 44100hz
 
 ```shell
 python resample.py
@@ -68,11 +47,6 @@ python resample.py
 2. 自动划分训练集 验证集 测试集 以及自动生成配置文件
 ```shell
 python preprocess_flist_config.py
-# 注意
-# 自动生成的配置文件中，说话人数量n_speakers会自动按照数据集中的人数而定
-# 为了给之后添加说话人留下一定空间，n_speakers自动设置为 当前数据集人数乘2
-# 如果想多留一些空位可以在此步骤后 自行修改生成的config.json中n_speakers数量
-# 一旦模型开始训练后此项不可再更改
 ```
 3. 生成hubert与f0
 ```shell
@@ -83,41 +57,30 @@ python preprocess_hubert_f0.py
 
 ## 训练
 ```shell
-python train.py -c configs/config.json -m 32k
+python train.py -c configs/config.json -m 44k
 ```
 
-
 ## 推理
-
 使用 [inference_main.py](inference_main.py)
-+ 更改`model_path`为你自己训练的最新模型记录点
-+ 将待转换的音频放在`raw`文件夹下
-+ `clean_names` 写待转换的音频名称
-+ `trans` 填写变调半音数量
-+ `spk_list` 填写合成的说话人名称
 
+截止此处，4.0使用方法（训练、推理）和3.0完全一致，没有任何变化。
+
+## 可选项
+如果前面的效果已经满意，那以下内容可以忽略，不影响模型使用
+### 自动f0预测
+4.0模型训练过程会训练一个f0预测器，对于语音转换可以开启自动音高预测，如果效果不好也可以使用手动的，但转换歌声时请不要启用此功能！！！会严重跑调！！
++ 在inference_main中设置auto_predict_f0为true即可
+### 聚类音色泄漏控制
+介绍：聚类方案基本可以完全消除音色泄漏，使得模型训练出来更像目标的音色，但是单纯的聚类方案会降低模型的咬字（会口齿不清），本模型采用了融合的方式，
+可以线性控制聚类方案与非聚类方案的占比，也就是可以手动在"像目标音色" 和 "咬字清晰" 之间调整比例，找到合适的折中点。
++ 训练过程：
+  + 前面的已有步骤不用进行任何的变动，只需要额外训练一个聚类模型
+  + 聚类模型的训练：使用cpu性能较好的机器训练，据我的经验在腾讯云6核cpu训练每个speaker需要约4分钟即可完成训练
+  + 执行python cluster/train_cluster.py ，模型的输出会在 logs/44k/kmeans_10000.pt
++ 推理过程：
+  + inference_main中指定cluster_model_path
+  + inference_main中指定cluster_infer_ratio，0为完全不使用聚类，1为只使用聚类，通常设置0.5即可
 
 ## Onnx导出
-### 重要的事情说三遍：导出Onnx时，请重新克隆整个仓库！！！导出Onnx时，请重新克隆整个仓库！！！导出Onnx时，请重新克隆整个仓库！！！
-使用 [onnx_export.py](onnx_export.py)
-+ 新建文件夹：`checkpoints` 并打开
-+ 在`checkpoints`文件夹中新建一个文件夹作为项目文件夹，文件夹名为你的项目名称，比如`aziplayer`
-+ 将你的模型更名为`model.pth`，配置文件更名为`config.json`，并放置到刚才创建的`aziplayer`文件夹下
-+ 将 [onnx_export.py](onnx_export.py) 中`path = "NyaruTaffy"` 的 `"NyaruTaffy"` 修改为你的项目名称，`path = "aziplayer"`
-+ 运行 [onnx_export.py](onnx_export.py) 
-+ 等待执行完毕，在你的项目文件夹下会生成一个`model.onnx`，即为导出的模型
-+ 注意：若想导出48K模型，请按照以下步骤修改文件，或者直接使用`model_onnx_48k.py`
-   + 请打开[model_onnx.py](model_onnx.py)，将其中最后一个class`SynthesizerTrn`的hps中`sampling_rate`32000改为48000
-   + 请打开[nvSTFT](/vdecoder/hifigan/nvSTFT.py)，将其中所有32000改为48000
-   ### Onnx模型支持的UI
-   + [MoeSS](https://github.com/NaruseMioShirakana/MoeSS)
-+ 我去除了所有的训练用函数和一切复杂的转置，一行都没有保留，因为我认为只有去除了这些东西，才知道你用的是Onnx
-
-## Gradio（WebUI）
-使用 [sovits_gradio.py](sovits_gradio.py)
-+ 新建文件夹：checkpoints 并打开
-+ 在checkpoints文件夹中新建一个文件夹作为项目文件夹，文件夹名为你的项目名称
-+ 将你的模型更名为model.pth，配置文件更名为config.json，并放置到刚才创建的文件夹下
-+ 运行 [sovits_gradio.py](sovits_gradio.py) 
-
+暂未完成
 

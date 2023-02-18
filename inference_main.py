@@ -16,12 +16,14 @@ chunks_dict = infer_tool.read_temp("inference/chunks_temp.json")
 
 model_path = "/Volumes/Extend/下载/cvecG_50400.pth"
 config_path = "configs/config.json"
-svc_model = Svc(model_path, config_path)
+cluster_model_path = "logs/44k/kmeans_10000.pt"
+svc_model = Svc(model_path, config_path,
+                device=None,
+                cluster_model_path=cluster_model_path)
 infer_tool.mkdir(["raw", "results"])
 
 # 支持多个wav文件，放在raw文件夹下
 clean_names = ["mytest","src-test"]
-clean_names = ['君の知らない物語-src']
 trans = [0]  # 音高调整，支持正负（半音）
 spk_list = ['jishuang']  # 每次同时合成多语者音色
 slice_db = -40  # 默认-40，嘈杂的音频可以-30，干声保留呼吸可以-50
