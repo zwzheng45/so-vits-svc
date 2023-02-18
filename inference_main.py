@@ -14,17 +14,20 @@ from inference.infer_tool import Svc
 logging.getLogger('numba').setLevel(logging.WARNING)
 chunks_dict = infer_tool.read_temp("inference/chunks_temp.json")
 
-model_path = "/Volumes/Extend/下载/cvecG_8000.pth"
+model_path = "/Volumes/Extend/下载/cvecG_50400.pth"
 config_path = "configs/config.json"
 svc_model = Svc(model_path, config_path)
 infer_tool.mkdir(["raw", "results"])
 
 # 支持多个wav文件，放在raw文件夹下
-clean_names = ["君の知らない物語-src.wav"]
-trans = [-5]  # 音高调整，支持正负（半音）
-spk_list = ['yunhao']  # 每次同时合成多语者音色
+clean_names = ["mytest","src-test"]
+clean_names = ['君の知らない物語-src']
+trans = [0]  # 音高调整，支持正负（半音）
+spk_list = ['jishuang']  # 每次同时合成多语者音色
 slice_db = -40  # 默认-40，嘈杂的音频可以-30，干声保留呼吸可以-50
 wav_format = 'flac'  # 音频输出格式
+cluster_infer_ratio = 0
+auto_predict_f0 = False
 
 infer_tool.fill_a_to_b(trans, clean_names)
 for clean_name, tran in zip(clean_names, trans):
@@ -48,9 +51,12 @@ for clean_name, tran in zip(clean_names, trans):
                 print('jump empty segment')
                 _audio = np.zeros(length)
             else:
-                out_audio, out_sr = svc_model.infer(spk, tran, raw_path)
+                out_audio, out_sr = svc_model.infer(spk, tran, raw_path,
+                                                    cluster_infer_ratio=cluster_infer_ratio,
+                                                    auto_predict_f0=auto_predict_f0)
                 _audio = out_audio.cpu().numpy()
             audio.extend(list(_audio))
-
-        res_path = f'./results/{clean_name}_{tran}key_{spk}.{wav_format}'
+        key = "auto" if auto_predict_f0 else f"{tran}key"
+        cluster_name = "" if cluster_infer_ratio ==0 else f"_{cluster_infer_ratio}"
+        res_path = f'./results/{clean_name}_{key}_{spk}{cluster_name}.{wav_format}'
         soundfile.write(res_path, audio, svc_model.target_sample, format=wav_format)

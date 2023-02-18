@@ -14,6 +14,7 @@ import soundfile
 import torch
 import torchaudio
 
+import cluster
 from hubert import hubert_model
 import utils
 from models import SynthesizerTrn
@@ -92,7 +93,9 @@ def mkdir(paths: list):
 
 
 class Svc(object):
-    def __init__(self, net_g_path, config_path, device=None):
+    def __init__(self, net_g_path, config_path,
+                 device=None,
+                 cluster_model_path="logs/44k/kmeans_10000.pt"):
         self.net_g_path = net_g_path
         if device is None:
             self.dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -106,6 +109,8 @@ class Svc(object):
         # 加载hubert
         self.hubert_model = utils.get_hubert_model().to(self.dev)
         self.load_model()
+        if os.path.exists(cluster_model_path):
+            self.cluster_model = cluster.get_cluster_model(cluster_model_path)
 
     def load_model(self):
         # 获取模型配置
@@ -121,7 +126,7 @@ class Svc(object):
 
 
 
-    def get_unit_f0(self, in_path, tran):
+    def get_unit_f0(self, in_path, tran, cluster_infer_ratio, speaker):
 
         wav, sr = librosa.load(in_path, sr=self.target_sample)
 
@@ -134,22 +139,27 @@ class Svc(object):
         wav16k = librosa.resample(wav, orig_sr=self.target_sample, target_sr=16000)
         wav16k = torch.from_numpy(wav16k).to(self.dev)
         c = utils.get_hubert_content(self.hubert_model, wav_16k_tensor=wav16k)
-        c = utils.repeat_expand_2d(c.squeeze(0), f0.shape[1]).unsqueeze(0)
+        c = utils.repeat_expand_2d(c.squeeze(0), f0.shape[1])
 
+        if cluster_infer_ratio !=0:
+            cluster_c = cluster.get_cluster_center_result(self.cluster_model, c.numpy().T, speaker).T
+            cluster_c = torch.FloatTensor(cluster_c)
+            c = cluster_infer_ratio * cluster_c + (1 - cluster_infer_ratio) * c
+
+        c = c.unsqueeze(0)
         return c, f0
 
-    def infer(self, speaker, tran, raw_path):
-        if type(speaker) == str:
-            speaker_id = self.spk2id[speaker]
-        else:
-            speaker_id = speaker
+    def infer(self, speaker, tran, raw_path,
+              cluster_infer_ratio=0,
+              auto_predict_f0=False):
+        speaker_id = self.spk2id[speaker]
         sid = torch.LongTensor([int(speaker_id)]).to(self.dev).unsqueeze(0)
-        c, f0 = self.get_unit_f0(raw_path, tran)
+        c, f0 = self.get_unit_f0(raw_path, tran, cluster_infer_ratio, speaker)
         if "half" in self.net_g_path and torch.cuda.is_available():
             c = c.half()
         with torch.no_grad():
             start = time.time()
-            audio = self.net_g_ms.infer(c, f0=f0, g=sid)[0,0].data.float()
+            audio = self.net_g_ms.infer(c, f0=f0, g=sid, predict_f0=auto_predict_f0)[0,0].data.float()
             use_time = time.time() - start
             print("vits use time:{}".format(use_time))
         return audio, audio.shape[-1]
