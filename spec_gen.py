@@ -1,4 +1,4 @@
-from data_utils import TextAudioSpeakerLoader, EvalDataLoader
+from data_utils import TextAudioSpeakerLoader
 import json
 from tqdm import tqdm
 
