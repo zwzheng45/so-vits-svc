@@ -17,7 +17,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 import modules.commons as commons
 import utils
-from data_utils import TextAudioSpeakerLoader, EvalDataLoader
+from data_utils import TextAudioSpeakerLoader, TextAudioCollate
 from models import (
     SynthesizerTrn,
     MultiPeriodDiscriminator,
@@ -61,15 +61,15 @@ def run(rank, n_gpus, hps):
     dist.init_process_group(backend=  'gloo' if os.name == 'nt' else 'nccl', init_method='env://', world_size=n_gpus, rank=rank)
     torch.manual_seed(hps.train.seed)
     torch.cuda.set_device(rank)
-
+    collate_fn = TextAudioCollate()
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps)
     train_loader = DataLoader(train_dataset, num_workers=8, shuffle=False, pin_memory=True,
-                              batch_size=hps.train.batch_size)
+                              batch_size=hps.train.batch_size,collate_fn=collate_fn)
     if rank == 0:
-        eval_dataset = EvalDataLoader(hps.data.validation_files, hps)
+        eval_dataset = TextAudioSpeakerLoader(hps.data.validation_files, hps)
         eval_loader = DataLoader(eval_dataset, num_workers=1, shuffle=False,
                                  batch_size=1, pin_memory=False,
-                                 drop_last=False)
+                                 drop_last=False, collate_fn=collate_fn)
 
     net_g = SynthesizerTrn(
         hps.data.filter_length // 2 + 1,
@@ -134,11 +134,12 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
     net_g.train()
     net_d.train()
     for batch_idx, items in enumerate(train_loader):
-        c, f0, spec, y, spk = items
+        c, f0, spec, y, spk, lengths = items
         g = spk.cuda(rank, non_blocking=True)
         spec, y = spec.cuda(rank, non_blocking=True), y.cuda(rank, non_blocking=True)
         c = c.cuda(rank, non_blocking=True)
         f0 = f0.cuda(rank, non_blocking=True)
+        lengths = lengths.cuda(rank, non_blocking=True)
         mel = spec_to_mel_torch(
             spec,
             hps.data.filter_length,
@@ -149,7 +150,8 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 
         with autocast(enabled=hps.train.fp16_run):
             y_hat, ids_slice, z_mask, \
-            (z, z_p, m_p, logs_p, m_q, logs_q), pred_lf0, norm_lf0, lf0 = net_g(c, f0, spec, g=g, mel=mel)
+            (z, z_p, m_p, logs_p, m_q, logs_q), pred_lf0, norm_lf0, lf0 = net_g(c, f0, spec, g=g, c_lengths=lengths,
+                                                                                spec_lengths=lengths)
 
             y_mel = commons.slice_segments(mel, ids_slice, hps.train.segment_size // hps.data.hop_length)
             y_hat_mel = mel_spectrogram_torch(
@@ -246,7 +248,7 @@ def evaluate(hps, generator, eval_loader, writer_eval):
     audio_dict = {}
     with torch.no_grad():
         for batch_idx, items in enumerate(eval_loader):
-            c, f0, spec, y, spk = items
+            c, f0, spec, y, spk, _ = items
             g = spk[:1].cuda(0)
             spec, y = spec[:1].cuda(0), y[:1].cuda(0)
             c = c[:1].cuda(0)

@@ -377,20 +377,15 @@ class SynthesizerTrn(nn.Module):
         spk_channels=gin_channels
     )
 
-  def forward(self, c, f0, spec, g=None, mel=None, c_lengths=None, spec_lengths=None):
-    if c_lengths == None:
-      c_lengths = (torch.ones(c.size(0)) * c.size(-1)).to(c.device)
-    if spec_lengths == None:
-      spec_lengths = (torch.ones(spec.size(0)) * spec.size(-1)).to(spec.device)
+  def forward(self, c, f0, spec, g=None, c_lengths=None, spec_lengths=None):
     g = self.emb_g(g).transpose(1,2)
-
     # ssl prenet
     x_mask = torch.unsqueeze(commons.sequence_mask(c_lengths, c.size(2)), 1).to(c.dtype)
     x = self.pre(c) * x_mask
 
     # f0 predict
     lf0 = 2595. * torch.log10(1. + f0.unsqueeze(1) / 700.) / 500
-    norm_lf0 = utils.normalize_f0(lf0)
+    norm_lf0 = utils.normalize_f0(lf0, x_mask)
     pred_lf0 = self.f0_decoder(x, norm_lf0, x_mask, spk_emb=g)
 
     # encoder
@@ -406,16 +401,15 @@ class SynthesizerTrn(nn.Module):
 
     return o, ids_slice, spec_mask, (z, z_p, m_p, logs_p, m_q, logs_q), pred_lf0, norm_lf0, lf0
 
-  def infer(self, c, f0, g=None, c_lengths=None, predict_f0=False):
-    if c_lengths == None:
-      c_lengths = (torch.ones(c.size(0)) * c.size(-1)).to(c.device)
+  def infer(self, c, f0, g=None, predict_f0=False):
+    c_lengths = (torch.ones(c.size(0)) * c.size(-1)).to(c.device)
     g = self.emb_g(g).transpose(1,2)
     x_mask = torch.unsqueeze(commons.sequence_mask(c_lengths, c.size(2)), 1).to(c.dtype)
     x = self.pre(c) * x_mask
 
     if predict_f0:
         lf0 = 2595. * torch.log10(1. + f0.unsqueeze(1) / 700.) / 500
-        norm_lf0 = utils.normalize_f0(lf0)
+        norm_lf0 = utils.normalize_f0(lf0, x_mask)
         pred_lf0 = self.f0_decoder(x, norm_lf0, x_mask, spk_emb=g)
         f0 = (700 * (torch.pow(10, pred_lf0 * 500 / 2595) - 1)).squeeze(1)
 

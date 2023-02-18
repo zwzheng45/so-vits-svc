@@ -69,21 +69,17 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
 
         lmin = min(c.size(-1), spec.size(-1))
         assert abs(c.size(-1) - spec.size(-1)) < 3, (c.size(-1), spec.size(-1), f0.shape, filename)
-
+        assert abs(audio_norm.shape[1]-lmin * self.hop_length) < 3 * self.hop_length
         spec, c, f0 = spec[:, :lmin], c[:, :lmin], f0[:lmin]
         audio_norm = audio_norm[:, :lmin * self.hop_length]
-        _spec, _c, _audio_norm, _f0 = spec, c, audio_norm, f0
-        while spec.size(-1) < self.spec_len:
-            spec = torch.cat((spec, _spec), -1)
-            c = torch.cat((c, _c), -1)
-            f0 = torch.cat((f0, _f0), -1)
-            audio_norm = torch.cat((audio_norm, _audio_norm), -1)
-        start = random.randint(0, spec.size(-1) - self.spec_len)
-        end = start + self.spec_len
-        spec = spec[:, start:end]
-        c = c[:, start:end]
-        f0 = f0[start:end]
-        audio_norm = audio_norm[:, start * self.hop_length:end * self.hop_length]
+        if spec.shape[1] < 60:
+            print("skip too short audio:", filename)
+            return None
+        if spec.shape[1] > 800:
+            start = random.randint(0, spec.shape[1]-800)
+            end = start + 790
+            spec, c, f0 = spec[:, start:end], c[:, start:end], f0[start:end]
+            audio_norm = audio_norm[:, start * self.hop_length : end * self.hop_length]
 
         return c, f0, spec, audio_norm, spk
 
@@ -94,65 +90,47 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         return len(self.audiopaths)
 
 
-class EvalDataLoader(torch.utils.data.Dataset):
-    """
-        1) loads audio, speaker_id, text pairs
-        2) normalizes text and converts them to sequences of integers
-        3) computes spectrograms from audio files.
-    """
+class TextAudioCollate:
 
-    def __init__(self, audiopaths, hparams):
-        self.audiopaths = load_filepaths_and_text(audiopaths)
-        self.max_wav_value = hparams.data.max_wav_value
-        self.sampling_rate = hparams.data.sampling_rate
-        self.filter_length = hparams.data.filter_length
-        self.hop_length = hparams.data.hop_length
-        self.win_length = hparams.data.win_length
-        self.sampling_rate = hparams.data.sampling_rate
-        self.use_sr = hparams.train.use_sr
-        self.audiopaths = self.audiopaths[:10]
-        self.spk_map = hparams.spk
+    def __call__(self, batch):
+        batch = [b for b in batch if b is not None]
 
+        input_lengths, ids_sorted_decreasing = torch.sort(
+            torch.LongTensor([x[0].shape[1] for x in batch]),
+            dim=0, descending=True)
 
-    def get_audio(self, filename):
-        filename = filename.replace("\\", "/")
-        audio, sampling_rate = load_wav_to_torch(filename)
-        if sampling_rate != self.sampling_rate:
-            raise ValueError("{} SR doesn't match target {} SR".format(
-                sampling_rate, self.sampling_rate))
-        audio_norm = audio / self.max_wav_value
-        audio_norm = audio_norm.unsqueeze(0)
-        spec_filename = filename.replace(".wav", ".spec.pt")
-        if os.path.exists(spec_filename):
-            spec = torch.load(spec_filename)
-        else:
-            spec = spectrogram_torch(audio_norm, self.filter_length,
-                                     self.sampling_rate, self.hop_length, self.win_length,
-                                     center=False)
-            spec = torch.squeeze(spec, 0)
-            torch.save(spec, spec_filename)
+        max_c_len = max([x[0].size(1) for x in batch])
+        max_wav_len = max([x[3].size(1) for x in batch])
 
-        spk = filename.split("/")[-2]
-        spk = torch.LongTensor([self.spk_map[spk]])
+        lengths = torch.LongTensor(len(batch))
 
-        f0 = np.load(filename + ".f0.npy")
-        f0, uv = utils.interpolate_f0(f0)
-        f0 = torch.FloatTensor(f0)
+        c_padded = torch.FloatTensor(len(batch), batch[0][0].shape[0], max_c_len)
+        f0_padded = torch.FloatTensor(len(batch), max_c_len)
+        spec_padded = torch.FloatTensor(len(batch), batch[0][2].shape[0], max_c_len)
+        wav_padded = torch.FloatTensor(len(batch), 1, max_wav_len)
+        spkids = torch.LongTensor(len(batch), 1)
 
-        c = torch.load(filename + ".soft.pt")
-        c = utils.repeat_expand_2d(c.squeeze(0), f0.shape[0])
+        c_padded.zero_()
+        spec_padded.zero_()
+        f0_padded.zero_()
+        wav_padded.zero_()
 
-        lmin = min(c.size(-1), spec.size(-1), f0.shape[0])
-        assert abs(c.size(-1) - spec.size(-1)) < 3, (c.size(-1), spec.size(-1), f0.shape)
+        for i in range(len(ids_sorted_decreasing)):
+            row = batch[ids_sorted_decreasing[i]]
 
-        spec, c, f0 = spec[:, :lmin], c[:, :lmin], f0[:lmin]
-        audio_norm = audio_norm[:, :lmin * self.hop_length]
+            c = row[0]
+            c_padded[i, :, :c.size(1)] = c
+            lengths[i] = c.size(1)
 
-        return c, f0, spec, audio_norm, spk
+            f0 = row[1]
+            f0_padded[i, :f0.size(0)] = f0
 
-    def __getitem__(self, index):
-        return self.get_audio(self.audiopaths[index][0])
+            spec = row[2]
+            spec_padded[i, :, :spec.size(1)] = spec
 
-    def __len__(self):
-        return len(self.audiopaths)
+            wav = row[3]
+            wav_padded[i, :, :wav.size(1)] = wav
 
+            spkids[i, 0] = row[4]
+
+        return c_padded, f0_padded, spec_padded, wav_padded, spkids, lengths

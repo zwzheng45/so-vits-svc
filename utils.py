@@ -38,15 +38,26 @@ f0_mel_max = 1127 * np.log(1 + f0_max / 700)
 #             factor = 1
 #         f0_norm[i, 0, :] = (f0_norm[i, 0, :] - means) * factor
 #     return f0_norm
-def normalize_f0(f0, random_scale=True):
-    means = torch.mean(f0[:, 0, :], dim=1, keepdim=True)
+# def normalize_f0(f0, random_scale=True):
+#     means = torch.mean(f0[:, 0, :], dim=1, keepdim=True)
+#     if random_scale:
+#         factor = torch.Tensor(f0.shape[0],1).uniform_(0.8, 1.2).to(f0.device)
+#     else:
+#         factor = torch.ones(f0.shape[0], 1, 1).to(f0.device)
+#     f0_norm = (f0 - means.unsqueeze(-1)) * factor.unsqueeze(-1)
+#     return f0_norm
+def normalize_f0(f0, x_mask, random_scale=True):
+    # calculate means based on x_mask
+    mask = x_mask.squeeze(1)
+    means = torch.sum(f0[:, 0, :] * mask, dim=1, keepdim=True) / torch.sum(mask, dim=1, keepdim=True)
+
     if random_scale:
-        factor = torch.Tensor(f0.shape[0],1).uniform_(0.8, 1.2).to(f0.device)
+        factor = torch.Tensor(f0.shape[0], 1).uniform_(0.8, 1.2).to(f0.device)
     else:
         factor = torch.ones(f0.shape[0], 1, 1).to(f0.device)
-    f0_norm = (f0 - means.unsqueeze(-1))
-    f0_norm =f0_norm * factor.unsqueeze(-1)
-    return f0_norm
+    # normalize f0 based on means and factor
+    f0_norm = (f0 - means.unsqueeze(-1)) * factor.unsqueeze(-1)
+    return f0_norm * x_mask
 
 
 def plot_data_to_numpy(x, y):
@@ -249,8 +260,9 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path,
               'learning_rate': learning_rate}, checkpoint_path)
   if current_step >= val_steps * 3:
     to_del_ckptname = checkpoint_path.replace(str(current_step), str(current_step - val_steps * 3))
-    os.remove(to_del_ckptname)
-    print("Removing ", to_del_ckptname)
+    if os.path.exists(to_del_ckptname):
+        os.remove(to_del_ckptname)
+        print("Removing ", to_del_ckptname)
 
 
 def clean_checkpoints(path_to_models='logs/48k/', n_ckpts_to_keep=2, sort_by_time=True):
