@@ -109,12 +109,12 @@ class TextEncoder(nn.Module):
         kernel_size,
         p_dropout)
 
-  def forward(self, x, x_mask, f0=None):
+  def forward(self, x, x_mask, f0=None, noice_scale=1):
     x = x + self.f0_emb(f0).transpose(1,2)
     x = self.enc_(x * x_mask, x_mask)
     stats = self.proj(x) * x_mask
     m, logs = torch.split(stats, self.out_channels, dim=1)
-    z = (m + torch.randn_like(m) * torch.exp(logs) * 0.4) * x_mask
+    z = (m + torch.randn_like(m) * torch.exp(logs) * noice_scale) * x_mask
 
     return z, m, logs, x_mask
 
@@ -402,7 +402,7 @@ class SynthesizerTrn(nn.Module):
 
     return o, ids_slice, spec_mask, (z, z_p, m_p, logs_p, m_q, logs_q), pred_lf0, norm_lf0, lf0
 
-  def infer(self, c, f0, uv, g=None, predict_f0=False):
+  def infer(self, c, f0, uv, g=None, noice_scale=0.35, predict_f0=False):
     c_lengths = (torch.ones(c.size(0)) * c.size(-1)).to(c.device)
     g = self.emb_g(g).transpose(1,2)
     x_mask = torch.unsqueeze(commons.sequence_mask(c_lengths, c.size(2)), 1).to(c.dtype)
@@ -414,7 +414,7 @@ class SynthesizerTrn(nn.Module):
         pred_lf0 = self.f0_decoder(x, norm_lf0, x_mask, spk_emb=g)
         f0 = (700 * (torch.pow(10, pred_lf0 * 500 / 2595) - 1)).squeeze(1)
 
-    z_p, m_p, logs_p, c_mask = self.enc_p(x, x_mask, f0=f0_to_coarse(f0))
+    z_p, m_p, logs_p, c_mask = self.enc_p(x, x_mask, f0=f0_to_coarse(f0), noice_scale=noice_scale)
     z = self.flow(z_p, c_mask, g=g, reverse=True)
     o = self.dec(z * c_mask, g=g, f0=f0)
     return o

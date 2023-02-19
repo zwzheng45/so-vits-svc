@@ -153,7 +153,8 @@ class Svc(object):
 
     def infer(self, speaker, tran, raw_path,
               cluster_infer_ratio=0,
-              auto_predict_f0=False):
+              auto_predict_f0=False,
+              noice_scale=0.4):
         speaker_id = self.spk2id[speaker]
         sid = torch.LongTensor([int(speaker_id)]).to(self.dev).unsqueeze(0)
         c, f0, uv = self.get_unit_f0(raw_path, tran, cluster_infer_ratio, speaker)
@@ -161,7 +162,7 @@ class Svc(object):
             c = c.half()
         with torch.no_grad():
             start = time.time()
-            audio = self.net_g_ms.infer(c, f0=f0, g=sid, uv=uv, predict_f0=auto_predict_f0)[0,0].data.float()
+            audio = self.net_g_ms.infer(c, f0=f0, g=sid, uv=uv, predict_f0=auto_predict_f0, noice_scale=noice_scale)[0,0].data.float()
             use_time = time.time() - start
             print("vits use time:{}".format(use_time))
         return audio, audio.shape[-1]

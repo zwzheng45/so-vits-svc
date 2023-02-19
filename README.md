@@ -63,7 +63,23 @@ python train.py -c configs/config.json -m 44k
 ## 推理
 使用 [inference_main.py](inference_main.py)
 
-截止此处，4.0使用方法（训练、推理）和3.0完全一致，没有任何变化。
+截止此处，4.0使用方法（训练、推理）和3.0完全一致，没有任何变化（推理增加了命令行支持）
+
+```shell
+# 例
+python inference_main.py -m "G_30400.pth" -c "configs/config.json" -n "君の知らない物語-src.wav" -t 0 -s "nen"
+```
+必填项部分
++ -m, --model_path：模型路径。
++ -c, --config_path：配置文件路径。
++ -n, --clean_names：wav 文件名列表，放在 raw 文件夹下。
++ -t, --trans：音高调整，支持正负（半音）。
++ -s, --spk_list：合成目标说话人名称。
+
+可选项部分：见下一节
++ -a, --auto_predict_f0：语音转换自动预测音高，转换歌声时不要打开这个会严重跑调。
++ -cm, --cluster_model_path：聚类模型路径，如果没有训练聚类则随便填。
++ -cr, --cluster_infer_ratio：聚类方案占比，范围 0-1，若没有训练聚类模型则填 0 即可。
 
 ## 可选项
 如果前面的效果已经满意，那以下内容可以忽略，不影响模型使用
