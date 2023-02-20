@@ -23,7 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description='sovits4 inference')
 
     # 一定要设置的部分
-    parser.add_argument('-m', '--model_path', type=str, default="/Volumes/Extend/下载/G_30400 (1).pth", help='模型路径')
+    parser.add_argument('-m', '--model_path', type=str, default="logs/44k/G_0.pth", help='模型路径')
     parser.add_argument('-c', '--config_path', type=str, default="configs/config.json", help='配置文件路径')
     parser.add_argument('-n', '--clean_names', type=str, nargs='+', default=["君の知らない物語-src.wav"], help='wav文件名列表，放在raw文件夹下')
     parser.add_argument('-t', '--trans', type=int, nargs='+', default=[0], help='音高调整，支持正负（半音）')

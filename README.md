@@ -7,13 +7,13 @@
 ### 4.0版本更新内容
 + 特征输入更换为 [Content Vec](https://github.com/auspicious3000/contentvec) 
 + 采样率统一使用44100hz
-+ 由于更改了hop size等参数以及精简了部分模型结构，推理所需显存占用大幅降低，4.0版本44khz显存占用甚至远小于3.0版本的32khz
++ 由于更改了hop size等参数以及精简了部分模型结构，推理所需显存占用**大幅降低**，4.0版本44khz显存占用甚至远小于3.0版本的32khz
 + 调整了部分代码结构
 + 数据集制作、训练过程和3.0保持一致，但模型不通用
 + 增加了可选项 1：vc模式自动预测音高f0,即转换语音时不需要手动输入变调key，男女声的调能自动转换，但仅限语音转换，该模式转换歌声会跑调
 + 增加了可选项 2：通过kmeans聚类方案减小音色泄漏，即使得音色更加像目标音色
 
-模型仍在训练测试效果中。。。。目前暂时请不要训练
+在线demo：[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/innnky/sovits4)
 
 ## 预先下载的模型文件
 + contentvec ：[checkpoint_best_legacy_500.pt](https://ibm.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr)
@@ -67,7 +67,7 @@ python train.py -c configs/config.json -m 44k
 
 ```shell
 # 例
-python inference_main.py -m "G_30400.pth" -c "configs/config.json" -n "君の知らない物語-src.wav" -t 0 -s "nen"
+python inference_main.py -m "logs/44k/G_30400.pth" -c "configs/config.json" -n "君の知らない物語-src.wav" -t 0 -s "nen"
 ```
 必填项部分
 + -m, --model_path：模型路径。
@@ -82,16 +82,17 @@ python inference_main.py -m "G_30400.pth" -c "configs/config.json" -n "君の知
 + -cr, --cluster_infer_ratio：聚类方案占比，范围 0-1，若没有训练聚类模型则填 0 即可。
 
 ## 可选项
-如果前面的效果已经满意，那以下内容可以忽略，不影响模型使用
+如果前面的效果已经满意，那以下内容可以忽略(其实确实这些可选项影响也比较小)，不影响模型使用
 ### 自动f0预测
 4.0模型训练过程会训练一个f0预测器，对于语音转换可以开启自动音高预测，如果效果不好也可以使用手动的，但转换歌声时请不要启用此功能！！！会严重跑调！！
 + 在inference_main中设置auto_predict_f0为true即可
 ### 聚类音色泄漏控制
-介绍：聚类方案基本可以消除音色泄漏，使得模型训练出来更像目标的音色，但是单纯的聚类方案会降低模型的咬字（会口齿不清），本模型采用了融合的方式，
+介绍：聚类方案可以减小音色泄漏，使得模型训练出来更像目标的音色（但其实不是特别明显），但是单纯的聚类方案会降低模型的咬字（会口齿不清）（这个很明显），本模型采用了融合的方式，
 可以线性控制聚类方案与非聚类方案的占比，也就是可以手动在"像目标音色" 和 "咬字清晰" 之间调整比例，找到合适的折中点。
+
+使用聚类前面的已有步骤不用进行任何的变动，只需要额外训练一个聚类模型，虽然效果比较有限，但训练成本也比较低
 + 训练过程：
-  + 前面的已有步骤不用进行任何的变动，只需要额外训练一个聚类模型
-  + 聚类模型的训练：使用cpu性能较好的机器训练，据我的经验在腾讯云6核cpu训练每个speaker需要约4分钟即可完成训练
+  + 使用cpu性能较好的机器训练，据我的经验在腾讯云6核cpu训练每个speaker需要约4分钟即可完成训练
   + 执行python cluster/train_cluster.py ，模型的输出会在 logs/44k/kmeans_10000.pt
 + 推理过程：
   + inference_main中指定cluster_model_path
