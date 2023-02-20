@@ -1,4 +1,6 @@
 import logging
+import multiprocessing
+
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 import os
 import json
@@ -63,8 +65,9 @@ def run(rank, n_gpus, hps):
     torch.cuda.set_device(rank)
     collate_fn = TextAudioCollate()
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps)
-    train_loader = DataLoader(train_dataset, num_workers=8, shuffle=False, pin_memory=True,
-                              batch_size=hps.train.batch_size,collate_fn=collate_fn)
+    num_workers = 8 if multiprocessing.cpu_count() > 4 else multiprocessing.cpu_count()
+    train_loader = DataLoader(train_dataset, num_workers=num_workers, shuffle=False, pin_memory=True,
+                              batch_size=hps.train.batch_size, collate_fn=collate_fn)
     if rank == 0:
         eval_dataset = TextAudioSpeakerLoader(hps.data.validation_files, hps)
         eval_loader = DataLoader(eval_dataset, num_workers=1, shuffle=False,
