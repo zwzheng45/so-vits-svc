@@ -18,7 +18,18 @@
 ## 预先下载的模型文件
 + contentvec ：[checkpoint_best_legacy_500.pt](https://ibm.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr)
   + 放在`hubert`目录下
-+ 预训练底模文件：还在训练中
++ 预训练底模文件： [G_0.pth](https://huggingface.co/innnky/sovits_pretrained/resolve/main/sovits4/G_0.pth) 与 [D_0.pth](https://huggingface.co/innnky/sovits_pretrained/resolve/main/sovits4/D_0.pth)
+  + 放在`logs/44k`目录下
+  + 预训练底模训练数据集包含云灏 即霜 辉宇·星AI 派蒙 绫地宁宁，覆盖男女生常见音域，可以认为是相对通用的底模
+```shell
+# 一键下载
+# contentvec
+# 由于作者提供的网盘没有直链，所以需要手动下载放在hubert目录
+# G与D预训练模型:
+wget -P logs/44k/ https://huggingface.co/innnky/sovits_pretrained/resolve/main/sovits4/G_0.pth
+wget -P logs/44k/ https://huggingface.co/innnky/sovits_pretrained/resolve/main/sovits4/D_0.pth
+
+```
 
 ## colab一键数据集制作、训练脚本
 暂未制作
