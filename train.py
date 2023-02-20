@@ -95,7 +95,7 @@ def run(rank, n_gpus, hps):
                                                    optim_g, skip_optimizer)
         _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d,
                                                    optim_d, skip_optimizer)
-        global_step = (epoch_str - 1) * len(train_loader)
+        global_step = max((epoch_str - 1) * len(train_loader), 0)
     except:
         print("load old checkpoint failed...")
         epoch_str = 1
