@@ -145,8 +145,8 @@ class Svc(object):
         c = utils.repeat_expand_2d(c.squeeze(0), f0.shape[1])
 
         if cluster_infer_ratio !=0:
-            cluster_c = cluster.get_cluster_center_result(self.cluster_model, c.numpy().T, speaker).T
-            cluster_c = torch.FloatTensor(cluster_c)
+            cluster_c = cluster.get_cluster_center_result(self.cluster_model, c.cpu().numpy().T, speaker).T
+            cluster_c = torch.FloatTensor(cluster_c).to(self.dev)
             c = cluster_infer_ratio * cluster_c + (1 - cluster_infer_ratio) * c
 
         c = c.unsqueeze(0)
