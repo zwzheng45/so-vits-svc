@@ -7,7 +7,7 @@
 ### 4.0版本更新内容
 + 特征输入更换为 [Content Vec](https://github.com/auspicious3000/contentvec) 
 + 采样率统一使用44100hz
-+ 由于更改了hop size等参数以及精简了部分模型结构，推理所需显存占用**大幅降低**，4.0版本44khz显存占用甚至远小于3.0版本的32khz
++ 由于更改了hop size等参数以及精简了部分模型结构，推理所需显存占用**大幅降低**，4.0版本44khz显存占用甚至小于3.0版本的32khz
 + 调整了部分代码结构
 + 数据集制作、训练过程和3.0保持一致，但模型完全不通用，数据集也需要全部重新预处理
 + 增加了可选项 1：vc模式自动预测音高f0,即转换语音时不需要手动输入变调key，男女声的调能自动转换，但仅限语音转换，该模式转换歌声会跑调
@@ -70,6 +70,7 @@ python preprocess_hubert_f0.py
 ```shell
 python train.py -c configs/config.json -m 44k
 ```
+注：4.0训练时会自动清除老的模型，只保留最新3个模型，如果想防止过拟合需要自己手动备份模型记录点
 
 ## 推理
 使用 [inference_main.py](inference_main.py)
