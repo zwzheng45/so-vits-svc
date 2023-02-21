@@ -111,5 +111,14 @@ python inference_main.py -m "logs/44k/G_30400.pth" -c "configs/config.json" -n "
   + inference_main中指定cluster_infer_ratio，0为完全不使用聚类，1为只使用聚类，通常设置0.5即可
 
 ## Onnx导出
-暂未完成
+使用 [onnx_export.py](onnx_export.py)
++ 新建文件夹：`checkpoints` 并打开
++ 在`checkpoints`文件夹中新建一个文件夹作为项目文件夹，文件夹名为你的项目名称，比如`aziplayer`
++ 将你的模型更名为`model.pth`，配置文件更名为`config.json`，并放置到刚才创建的`aziplayer`文件夹下
++ 将 [onnx_export.py](onnx_export.py) 中`path = "NyaruTaffy"` 的 `"NyaruTaffy"` 修改为你的项目名称，`path = "aziplayer"`
++ 运行 [onnx_export.py](onnx_export.py) 
++ 等待执行完毕，在你的项目文件夹下会生成一个`model.onnx`，即为导出的模型
+   ### Onnx模型支持的UI
+   + [MoeSS](https://github.com/NaruseMioShirakana/MoeSS)
++ 我去除了所有的训练用函数和一切复杂的转置，一行都没有保留，因为我认为只有去除了这些东西，才知道你用的是Onnx
 
