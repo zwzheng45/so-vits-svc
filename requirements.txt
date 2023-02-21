@@ -1,10 +1,10 @@
-Flask==2.1.2
-Flask_Cors==3.0.10
-gradio==3.4.1
+Flask
+Flask_Cors
+gradio
 numpy
-PyAudio==0.2.12
+PyAudio
 pyworld
-scipy==1.7.3
+scipy
 SoundFile
 torch
 torchaudio
