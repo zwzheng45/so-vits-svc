@@ -65,7 +65,7 @@ def run(rank, n_gpus, hps):
     torch.cuda.set_device(rank)
     collate_fn = TextAudioCollate()
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps)
-    num_workers = 8 if multiprocessing.cpu_count() > 4 else multiprocessing.cpu_count()
+    num_workers = 5 if multiprocessing.cpu_count() > 4 else multiprocessing.cpu_count()
     train_loader = DataLoader(train_dataset, num_workers=num_workers, shuffle=False, pin_memory=True,
                               batch_size=hps.train.batch_size, collate_fn=collate_fn)
     if rank == 0:
@@ -238,9 +238,13 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
             if global_step % hps.train.eval_interval == 0:
                 evaluate(hps, net_g, eval_loader, writer_eval)
                 utils.save_checkpoint(net_g, optim_g, hps.train.learning_rate, epoch,
-                                      os.path.join(hps.model_dir, "G_{}.pth".format(global_step)), hps.train.eval_interval, global_step)
+                                      os.path.join(hps.model_dir, "G_{}.pth".format(global_step)))
                 utils.save_checkpoint(net_d, optim_d, hps.train.learning_rate, epoch,
-                                      os.path.join(hps.model_dir, "D_{}.pth".format(global_step)),  hps.train.eval_interval, global_step)
+                                      os.path.join(hps.model_dir, "D_{}.pth".format(global_step)))
+                keep_ckpts = getattr(hps.train, 'keep_ckpts', 0)
+                if keep_ckpts > 0:
+                    utils.clean_checkpoints(path_to_models=hps.model_dir, n_ckpts_to_keep=keep_ckpts, sort_by_time=True)
+
         global_step += 1
 
     if rank == 0:

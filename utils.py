@@ -250,7 +250,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None, skip_optimizer=False
     return model, optimizer, learning_rate, iteration
 
 
-def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path, val_steps, current_step):
+def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path):
   logger.info("Saving model and optimizer state at iteration {} to {}".format(
     iteration, checkpoint_path))
   if hasattr(model, 'module'):
@@ -261,14 +261,8 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path,
               'iteration': iteration,
               'optimizer': optimizer.state_dict(),
               'learning_rate': learning_rate}, checkpoint_path)
-  if current_step >= val_steps * 3:
-    to_del_ckptname = checkpoint_path.replace(str(current_step), str(current_step - val_steps * 3))
-    if os.path.exists(to_del_ckptname):
-        os.remove(to_del_ckptname)
-        print("Removing ", to_del_ckptname)
 
-
-def clean_checkpoints(path_to_models='logs/48k/', n_ckpts_to_keep=2, sort_by_time=True):
+def clean_checkpoints(path_to_models='logs/44k/', n_ckpts_to_keep=2, sort_by_time=True):
   """Freeing up space by deleting saved ckpts
 
   Arguments:

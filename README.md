@@ -70,7 +70,7 @@ python preprocess_hubert_f0.py
 ```shell
 python train.py -c configs/config.json -m 44k
 ```
-注：4.0训练时会自动清除老的模型，只保留最新3个模型，如果想防止过拟合需要自己手动备份模型记录点
+注：训练时会自动清除老的模型，只保留最新3个模型，如果想防止过拟合需要自己手动备份模型记录点,或修改配置文件keep_ckpts 0为永不清除
 
 ## 推理
 使用 [inference_main.py](inference_main.py)
@@ -94,7 +94,7 @@ python inference_main.py -m "logs/44k/G_30400.pth" -c "configs/config.json" -n "
 + -cr, --cluster_infer_ratio：聚类方案占比，范围 0-1，若没有训练聚类模型则填 0 即可。
 
 ## 可选项
-如果前面的效果已经满意，那以下内容可以忽略(其实确实这些可选项影响也比较小)，不影响模型使用
+如果前面的效果已经满意，或者没看明白下面在讲啥，那后面的内容都可以忽略，不影响模型使用。(这些可选项影响比较小，可能在某些特定数据上有点效果，但大部分情况似乎都感知不太明显)，
 ### 自动f0预测
 4.0模型训练过程会训练一个f0预测器，对于语音转换可以开启自动音高预测，如果效果不好也可以使用手动的，但转换歌声时请不要启用此功能！！！会严重跑调！！
 + 在inference_main中设置auto_predict_f0为true即可
