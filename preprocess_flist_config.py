@@ -5,10 +5,21 @@ import re
 from tqdm import tqdm
 from random import shuffle
 import json
+import wave
 
 config_template = json.load(open("configs/config.json"))
 
 pattern = re.compile(r'^[\.a-zA-Z0-9_\/]+$')
+
+def get_wav_duration(file_path):
+    with wave.open(file_path, 'rb') as wav_file:
+        # 获取音频帧数
+        n_frames = wav_file.getnframes()
+        # 获取采样率
+        framerate = wav_file.getframerate()
+        # 计算时长（秒）
+        duration = n_frames / float(framerate)
+    return duration
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -28,12 +39,17 @@ if __name__ == "__main__":
         spk_dict[speaker] = spk_id
         spk_id += 1
         wavs = ["/".join([args.source_dir, speaker, i]) for i in os.listdir(os.path.join(args.source_dir, speaker))]
-        for wavpath in wavs:
-            if not pattern.match(wavpath):
-                print(f"warning：文件名{wavpath}中包含非字母数字下划线，可能会导致错误。（也可能不会）")
-        if len(wavs) < 10:
-            print(f"warning：{speaker}数据集数量小于10条，请补充数据")
-        wavs = [i for i in wavs if i.endswith("wav")]
+        new_wavs = []
+        for file in wavs:
+            if not file.endswith("wav"):
+                continue
+            if not pattern.match(file):
+                print(f"warning：文件名{file}中包含非字母数字下划线，可能会导致错误。（也可能不会）")
+            if get_wav_duration(file) < 0.3:
+                print("skip too short audio:", file)
+                continue
+            new_wavs.append(file)
+        wavs = new_wavs
         shuffle(wavs)
         train += wavs[2:-2]
         val += wavs[:2]
