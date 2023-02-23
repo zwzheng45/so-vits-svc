@@ -70,27 +70,28 @@ def main():
             audio = []
             for (slice_tag, data) in audio_data:
                 print(f'#=====segment start, {round(len(data) / audio_sr, 3)}s======')
-                # padd
-                pad_len = int(audio_sr * pad_seconds)
-                data = np.concatenate([np.zeros([pad_len]), data, np.zeros([pad_len])])
+
                 length = int(np.ceil(len(data) / audio_sr * svc_model.target_sample))
-                raw_path = io.BytesIO()
-                soundfile.write(raw_path, data, audio_sr, format="wav")
-                raw_path.seek(0)
                 if slice_tag:
                     print('jump empty segment')
                     _audio = np.zeros(length)
                 else:
+                    # padd
+                    pad_len = int(audio_sr * pad_seconds)
+                    data = np.concatenate([np.zeros([pad_len]), data, np.zeros([pad_len])])
+                    raw_path = io.BytesIO()
+                    soundfile.write(raw_path, data, audio_sr, format="wav")
+                    raw_path.seek(0)
                     out_audio, out_sr = svc_model.infer(spk, tran, raw_path,
                                                         cluster_infer_ratio=cluster_infer_ratio,
                                                         auto_predict_f0=auto_predict_f0,
                                                         noice_scale=noice_scale
                                                         )
                     _audio = out_audio.cpu().numpy()
+                    pad_len = int(svc_model.target_sample * pad_seconds)
+                    _audio = _audio[pad_len:-pad_len]
 
-                pad_len = int(svc_model.target_sample * pad_seconds)
-                _audio = _audio[pad_len:-pad_len]
-                audio.extend(list(_audio))
+                audio.extend(list(infer_tool.pad_array(_audio, length)))
             key = "auto" if auto_predict_f0 else f"{tran}key"
             cluster_name = "" if cluster_infer_ratio == 0 else f"_{cluster_infer_ratio}"
             res_path = f'./results/{clean_name}_{key}_{spk}{cluster_name}.{wav_format}'
