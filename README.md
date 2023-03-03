@@ -1,5 +1,5 @@
 # SoftVC VITS Singing Voice Conversion
-
+Colab自用
 
 ## 模型简介
 歌声音色转换模型，通过SoftVC内容编码器提取源音频语音特征，与F0同时输入VITS替换原本的文本输入达到歌声转换的效果。同时，更换声码器为 [NSF HiFiGAN](https://github.com/openvpi/DiffSinger/tree/refactor/modules/nsf_hifigan) 解决断音问题
