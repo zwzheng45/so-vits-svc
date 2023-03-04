@@ -1,6 +1,6 @@
 # SoftVC VITS Singing Voice Conversion
 Colab自用
-
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zwzheng45/so-vits-svc/blob/4.0/%E2%80%9Csovits4_0%E4%B8%80%E9%94%AE%E8%AE%AD%E7%BB%83_%E6%8E%A8%E7%90%86%E8%84%9A%E6%9C%AC_ipynb%E2%80%9D%E7%9A%84%E5%89%AF%E6%9C%AC.ipynb)
 ## 模型简介
 歌声音色转换模型，通过SoftVC内容编码器提取源音频语音特征，与F0同时输入VITS替换原本的文本输入达到歌声转换的效果。同时，更换声码器为 [NSF HiFiGAN](https://github.com/openvpi/DiffSinger/tree/refactor/modules/nsf_hifigan) 解决断音问题
 
